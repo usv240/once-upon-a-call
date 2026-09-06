@@ -151,12 +151,16 @@ export class VonageAudioCall extends xb.Script {
       });
       previewBtn.onTriggered = () => this._startPreview();
 
+      // A story read to an empty room while the child was asleep is not "a replay" to them —
+      // it is the story they have not heard yet, and it should be the loudest thing here.
+      const waiting = (this.state.waitingStories || 0) > 0;
       const hasStory = this.state.recordings > 0;
+      const who = this.story?.parentName || 'Their';
       const replayBtn = this.controlRow.addCol({ weight: 0.5 }).addTextButton({
-        text: hasStory ? 'Replay' : 'No story yet',
-        fontSize: 0.22,
-        backgroundColor: hasStory ? '#3b3b80' : '#2b2b3a',
-        fontColor: hasStory ? '#ffffff' : '#8a8aa0',
+        text: waiting ? `${who} read you a story` : hasStory ? 'Replay' : 'No story yet',
+        fontSize: waiting ? 0.17 : 0.22,
+        backgroundColor: waiting ? '#a2621b' : hasStory ? '#3b3b80' : '#2b2b3a',
+        fontColor: waiting || hasStory ? '#ffffff' : '#8a8aa0',
       });
       replayBtn.onTriggered = () => this._startReplay();
     } else if (state === 'PREVIEW') {
@@ -559,6 +563,9 @@ export class VonageAudioCall extends xb.Script {
       }
       if (!s.inCall && !this.callId && this.panel) {
         this.updateControlRow(this.replay ? 'REPLAY' : this.preview ? 'PREVIEW' : 'IDLE');
+        if (!this.replay && !this.preview && s.waitingStories > 0) {
+          this._setStatus(`${this.story?.parentName || 'Someone'} left you a story`);
+        }
       }
     });
     this.socket.on('keypad', ({ digit }) => {
@@ -582,9 +589,15 @@ export class VonageAudioCall extends xb.Script {
         this._setStatus(this.story.title);
       }
     });
-    this.socket.on('recording', ({ count }) => {
+    this.socket.on('recording', ({ count, unattended }) => {
       this.state.recordings = count;
+      if (unattended) this.state.waitingStories = (this.state.waitingStories || 0) + 1;
       if (this.book) this.book.setBanner('Tonight\'s story is saved 📖');
+      if (!this.callId) this.updateControlRow('IDLE');
+    });
+    // Someone read to an empty room. Whenever the child next opens the book, it is here.
+    this.socket.on('waiting-story', ({ title, parent }) => {
+      this._setStatus(`${parent} read you ${title}`);
       if (!this.callId) this.updateControlRow('IDLE');
     });
     this.socket.on('call:ended', () => {
@@ -773,10 +786,18 @@ export class VonageAudioCall extends xb.Script {
       this._setStatus('No saved story yet.');
       return;
     }
+    // The recording may be of a different book than the one currently on the shelf.
+    if (data.story && data.story !== this.story?.id) {
+      try {
+        this.story = await (await fetch('/api/story')).json();
+      } catch (e) {
+        /* keep what we have */
+      }
+    }
     this._createBook();
     if (!this.book) return;
     this._applyPage(0);
-    const who = this.story?.parentName || 'parent';
+    const who = data.parentName || this.story?.parentName || 'parent';
 
     // The page turns, highlights and effects are ours; the audio comes from Vonage. If the
     // recording is still uploading (or the download failed) the visual replay still runs, so
@@ -802,7 +823,11 @@ export class VonageAudioCall extends xb.Script {
       audio.onended = () => this._stopReplay();
       audio.onerror = () => this.book?.setBanner('Replaying the pages — audio unavailable');
       audio.play().catch((e) => console.warn('autoplay blocked; press Replay again', e));
-      this.book.setBanner(`Replaying ${who}'s story from last time`);
+      this.book.setBanner(
+        data.unattended
+          ? `${who} read you this last night, while you were asleep`
+          : `Replaying ${who}'s story from last time`
+      );
     } else {
       this.book.setBanner(`Replaying ${who}'s pages — the recording is still uploading`);
       timers.push(setTimeout(() => this._stopReplay(), lastEvent + 3000));

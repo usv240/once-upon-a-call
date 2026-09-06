@@ -10,6 +10,19 @@ Once Upon a Call turns that phone call into a *presence*. The parent dials in fr
 > with page turns, word highlighting and illustration effects — the same code paths a real call
 > drives — so you can see the entire experience without dialling anything.
 
+### The story that gets through anyway
+
+Whoever is calling may have booked this slot days ago: a prison phone allowance, a satellite
+window, a ward's one cordless handset. So if nobody is at the storybook — the app was never
+opened, or the child is already asleep — the call **does not hang up**. The caller is told the
+child isn't there, and invited to read anyway. Vonage records it, their keypad still turns the
+pages into the timeline, and the page number is spoken back into their ear so they know it
+registered. In the morning the child opens the book to *"Dad read you a story last night"*, and
+it plays back with the pages turning in his voice.
+
+It costs the caller nothing but the time they had already set aside, and it means a missed
+connection is never a wasted call.
+
 ### The shelf
 
 Three stories ship with it, and the parent chooses one from their keypad before the reading
@@ -62,6 +75,10 @@ Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
    Keypad at the menu ────┼──▶ /voice/story-choice ──▶ tonight's book, chosen without a screen
    Hang-up ───────────────┴──▶ /voice/recording ──▶ mp3 downloaded ──▶ Replay mode (+ SMS to caregiver)
 
+   Nobody answers? ───────▶ talk + record + conversation ──▶ the caller reads to an empty room;
+                                            keypad still writes the timeline, page numbers are
+                                            spoken back, and the child finds it in the morning.
+
    No phone to hand?  ▶ Watch the story ──▶ browser speech synthesis narrates the same book,
                                             driving the same highlight / effect / page code.
 ```
@@ -74,8 +91,9 @@ Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
 | **NCCO `talk`** | `/voice/answer` | Welcome + keypad instructions for a screenless caller |
 | **NCCO `input` (DTMF)** | `/voice/answer`, `/voice/pin`, `/voice/story-choice` | Family PIN gate for numbers not on the allow-list, and choosing tonight's book from a menu read aloud — the parent picks a story without ever seeing a screen |
 | **NCCO `record`** | `/voice/answer`, `/voice/recording` | Every story becomes a keepsake |
+| **NCCO `conversation`** | `unattendedTail()` | Holds the line open when nobody answers, so the caller can read to an empty room instead of losing a slot they waited a week for |
 | **Asynchronous DTMF** (`PUT /calls/{uuid}/input/dtmf`) | `subscribeDTMF`, `/voice/dtmf` | A 1970s keypad becomes an AR controller: `#` next page, `*` back, `1-3` effects |
-| **Per-leg TTS** (`PUT /calls/{uuid}/talk`) | `/api/say` | The AR world talks back *only* into the parent's ear |
+| **Per-leg TTS** (`PUT /calls/{uuid}/talk`) | `/api/say`, `/voice/dtmf` | The AR world talks back *only* into the parent's ear — the child's messages, and the page number when they are reading to an empty room and have no other feedback |
 | **Recording download** | `downloadRecording` | Replay without exposing credentials to the browser |
 | **Messages API** (optional) | `/voice/recording` | Caregiver SMS when a story is saved |
 
@@ -132,6 +150,7 @@ curl -s localhost:3000/api/health | jq
 3. Parent reads. **#** turns the page, **\*** goes back, **1/2/3** trigger surprises.
 4. Child taps **⭐ Hug** (or any message) — the parent hears it.
 5. Hang up → the story is saved. **Replay last story** plays it back with page turns and highlights in sync.
+6. If nobody answers, keep reading anyway — the story is kept and the child finds it in the morning.
 
 ---
 
@@ -151,10 +170,18 @@ pages/index.html          Import map (XR Blocks pinned), Client SDK, socket.io
 ## Tests
 
 ```bash
-npm test              # narration sync + story-data integrity, no browser needed
+npm test              # story data, narration sync, and the whole call flow — no browser, no Vonage account
 npm run fixture &     # static server on :3210 (no Vonage credentials required)
-npm run test:browser  # layout + companion pages + illustrations, in your installed Chrome
+npm run test:browser  # layout + companion pages + illustrations + keypad effects, in your installed Chrome
 ```
+
+**`test/flow.test.js`** boots the real `index.js` with a throwaway RSA key and drives it exactly
+as Vonage would: answer webhook, story menu, the keypad choice, the unattended NCCO, call
+events, DTMF, the recording webhook, and the morning replay. It asserts the NCCO actually
+contains what it must — that `connect` has a ring timeout and a fallback behind it, that the
+`conversation` holds the line, that a fast `##` turns two pages. Outbound calls to Vonage fail
+against the fake credentials on purpose: the flow has to survive that, and the test proves it
+does.
 
 **`test/preview.test.js`** covers the one piece of the preview tour that fails invisibly when
 it is wrong: mapping a speech-synthesis character offset to a word index. Browsers disagree on

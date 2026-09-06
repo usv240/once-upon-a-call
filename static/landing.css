@@ -99,6 +99,16 @@ h1 { font-size: var(--fs-xl); margin: 0; font-weight: 600; letter-spacing: 0.01e
 .cta[disabled] { opacity: 0.55; cursor: default; box-shadow: none; }
 .try-hint { color: var(--muted); font-size: var(--fs-sm); font-family: system-ui, sans-serif; }
 
+/* "Dad read you a story last night." The one thing on this page that should stop a child. */
+.waiting-note {
+  margin: 0; padding: 0.7em 1.1em; border-radius: var(--radius);
+  background: linear-gradient(100deg, rgba(162, 98, 27, 0.9), rgba(120, 70, 20, 0.75));
+  border: 1px solid var(--amber); color: var(--ink);
+  font-size: var(--fs-md); text-align: center;
+}
+.waiting-note b { color: var(--amber); }
+#landing.compact .waiting-note { display: none; }
+
 /* The shelf: one button per story, wrapping on narrow screens. */
 .shelf { display: flex; flex-wrap: wrap; gap: 0.5em; margin-top: 0.5em; }
 .book {

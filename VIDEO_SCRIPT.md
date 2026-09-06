@@ -47,6 +47,17 @@ Quick cut: an unknown number calls → *"Please enter your family PIN."*
 Hang up the story call → terminal `RECORDING downloaded`. Click **Replay last story** → pages turn in sync with the recording.
 > "Only approved numbers or the family PIN get into the child's room. Every story is saved, so on nights the parent can't call, the child still gets their voice."
 
+**3:00 – 3:30 — The one that matters (do not cut this)**
+Close the app entirely — or just don't answer. Call again from the phone.
+Phone audio: *"Maya isn't at the storybook right now. You can still read tonight's story and it
+will be waiting in the morning…"*
+Read a page. Press **#**. The phone says back: *"Page two."*
+Hang up. Now open the app: **"Dad read you a story last night."** Press it — the pages turn in
+his voice.
+> "A parent in prison gets fifteen minutes of phone time a week. If the child is already asleep,
+> most systems would tell them to call back. This one lets them read anyway — and the story is
+> waiting in the morning."
+
 **3:30 – 4:00 — Why it's real**
 On-screen: MN DOC 13 % recidivism stat, PA DOC $680K VR program, United Through Reading 300 story stations.
 > "Family contact measurably reduces re-offending. States are already paying for VR visits that need a headset inside the facility. Ours needs only the phone the parent already has. Pilot partners: United Through Reading, Storybook Dads, children's hospitals."
@@ -65,6 +76,7 @@ GitHub link on screen.
 - [ ] `#` page turn + `1` roar, with terminal `KEYPAD:` cut
 - [ ] Hug heard on the phone
 - [ ] PIN prompt from a second phone (or set APPROVED_NUMBERS to exclude your phone for one take)
+- [ ] **Unattended read: nobody answers, "Page two." spoken back, story waiting in the morning**
 - [ ] Replay mode
 - [ ] (Backup take) ▶ Watch the story narrated tour
 - [ ] Live captions visible under the illustration

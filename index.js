@@ -4,7 +4,8 @@
 // Vonage Voice API features used:
 //   1. Client SDK in-app leg    — the child's WebXR app answers the call     (/token, connect{app})
 //   2. NCCO input (DTMF)        — family PIN, and choosing tonight's story from the shelf
-//   3. NCCO record              — every story saved as a keepsake             (/voice/recording)
+//   3. NCCO record + conversation — a story read to an empty room when nobody answers,
+//                                    kept for the morning                     (/voice/recording)
 //   4. Asynchronous DTMF        — the parent's keypad turns AR pages          (subscribeDTMF, /voice/dtmf)
 //   5. Per-leg text-to-speech   — the AR world talks back to the parent only  (playTTS)
 //   6. Recording download       — replay mode without exposing credentials    (downloadRecording)
@@ -121,6 +122,8 @@ const session = {
   parentNumber: null,
   conversationUuid: null,
   page: 0,
+  unattended: false, // reading to an empty room: nobody answered, record it for the morning
+  dtmfSubscribed: false,
   timeline: [], // { t, type, data } during the live story (server-side events)
   recordings: [], // { file, url, uuid, start, end, size, events }
 };
@@ -144,9 +147,12 @@ function setStory(id, why) {
 
 function publicState() {
   const story = activeStory();
+  const waiting = session.recordings.filter((r) => r.unattended && !r.seen).length;
   return {
     page: session.page,
     storyId: session.storyId,
+    unattended: session.unattended,
+    waitingStories: waiting,
     storyTitle: story.title,
     totalPages: story.pages.length,
     inCall: !!session.parentLeg,
@@ -223,17 +229,45 @@ function menuNCCO() {
   ];
 }
 
+// The most important thing this app does.
+//
+// Whoever is calling may have had to book this slot days ago: a prison phone allowance, a
+// satellite window, a hospital ward's one cordless handset. Telling them "try again later"
+// spends a week of someone's waiting on a busy signal. So if nobody is at the storybook, they
+// read it anyway — Vonage records the call, their keypad still turns the pages into the
+// timeline, and the child opens the book in the morning to find the story already there,
+// pages turning in time with a voice.
+function unattendedTail(story) {
+  return [
+    {
+      action: 'talk',
+      language: 'en-US',
+      text: `${story.childName} isn't at the storybook right now. You can still read tonight's story and it will be waiting in the morning, with the pages turning in your voice. ${story.title}. Press pound when you finish each page. Hang up when you're done.`,
+    },
+    {
+      // Holds the line open, alone, for as long as they want to read. The record action above
+      // keeps capturing until they hang up.
+      action: 'conversation',
+      name: `ouac-solo-${session.conversationUuid || Date.now()}`,
+      startOnEnter: true,
+      endOnExit: true,
+    },
+  ];
+}
+
 function storyNCCO(from) {
   const story = activeStory();
+
+  // Nobody has even opened the storybook: go straight to reading for the morning.
   if (!session.userLoggedIn) {
+    session.unattended = true;
     return [
-      {
-        action: 'talk',
-        language: 'en-US',
-        text: `${story.childName}'s storybook isn't open yet. Please try again in a moment.`,
-      },
+      { action: 'record', eventUrl: [`${BASE_URL}/voice/recording`], format: 'mp3' },
+      ...unattendedTail(story),
     ];
   }
+
+  session.unattended = false;
   return [
     {
       action: 'talk',
@@ -249,8 +283,13 @@ function storyNCCO(from) {
     {
       action: 'connect',
       from,
+      timeout: 25,
       endpoint: [{ type: 'app', user: session.userLoggedIn }],
     },
+    // If the connect never completes — the child is asleep, the tablet is face-down, the app
+    // is open in a tab nobody is looking at — the NCCO carries on rather than hanging up, and
+    // the caller reads to the empty room instead of losing their slot.
+    ...unattendedTail(activeStory()),
   ];
 }
 
@@ -316,6 +355,21 @@ app.post('/voice/story-choice', (req, res) => {
   res.json(storyNCCO(req.body?.from));
 });
 
+// Subscribing twice is an error and forgetting to subscribe is a silent dead keypad, so it
+// happens in exactly one place. Attended calls wait for the child to answer; unattended ones
+// start as soon as the caller is on the line, because the keypad is all they have.
+async function listenToKeypad(why) {
+  if (!session.parentLeg || session.dtmfSubscribed) return;
+  session.dtmfSubscribed = true;
+  try {
+    await vonage.voice.subscribeDTMF(session.parentLeg, `${BASE_URL}/voice/dtmf`);
+    console.log(`Listening to keypad on parent leg ${session.parentLeg} (${why})`);
+  } catch (e) {
+    session.dtmfSubscribed = false;
+    console.error('subscribeDTMF failed:', e?.response?.data || e.message);
+  }
+}
+
 // ---------- call lifecycle ----------
 app.all('/voice/event', async (req, res) => {
   const ev = req.body || {};
@@ -329,24 +383,23 @@ app.all('/voice/event', async (req, res) => {
     session.conversationUuid = ev.conversation_uuid;
     session.page = 0;
     session.timeline = [];
+    session.dtmfSubscribed = false;
+    if (session.unattended) await listenToKeypad('reading to an empty room');
     broadcastState();
   }
 
   // Child's app leg answered -> the story begins: listen to the parent's keypad
   if (ev.status === 'answered' && ev.direction === 'outbound' && ev.to === session.userLoggedIn && session.parentLeg) {
     mark('page', { page: 0 });
-    try {
-      await vonage.voice.subscribeDTMF(session.parentLeg, `${BASE_URL}/voice/dtmf`);
-      console.log('Listening to keypad on parent leg', session.parentLeg);
-    } catch (e) {
-      console.error('subscribeDTMF failed:', e?.response?.data || e.message);
-    }
+    session.unattended = false; // the child made it after all
+    await listenToKeypad('the child answered');
     broadcastState();
   }
 
   if (ev.status === 'completed' && ev.uuid && ev.uuid === session.parentLeg) {
-    console.log('Parent hung up');
+    console.log(session.unattended ? 'Parent finished reading to the empty room' : 'Parent hung up');
     session.parentLeg = null;
+    session.dtmfSubscribed = false;
     io.emit('call:ended');
     broadcastState();
   }
@@ -373,6 +426,21 @@ app.post('/voice/dtmf', (req, res) => {
       io.emit('effect', { key: digit });
     }
     io.emit('keypad', { digit });
+
+    // Reading to an empty room, the caller has no screen and no child to react. Without a word
+    // back they cannot tell whether the page turned at all, so the page number is spoken into
+    // their leg — the same per-leg TTS the child's messages use.
+    if (session.unattended && session.parentLeg) {
+      const spoken =
+        digit === '#' || digit === '*'
+          ? `Page ${session.page + 1}.`
+          : activeStory().effects?.[digit]?.label || '';
+      if (spoken) {
+        vonage.voice
+          .playTTS(session.parentLeg, { text: spoken, language: 'en-US' })
+          .catch((e) => console.warn('page confirmation not spoken:', e?.message));
+      }
+    }
   }
   broadcastState();
 });
@@ -392,6 +460,9 @@ app.post('/voice/recording', async (req, res) => {
     size: r.size,
     events: [...session.timeline],
     parent: session.parentNumber,
+    story: session.storyId,
+    unattended: session.unattended,
+    seen: !session.unattended, // a story read live has already been heard
   };
   try {
     await vonage.voice.downloadRecording(r.recording_url, path.join(RECORDINGS_DIR, file));
@@ -401,7 +472,11 @@ app.post('/voice/recording', async (req, res) => {
     entry.url = null;
   }
   session.recordings.push(entry);
-  io.emit('recording', { count: session.recordings.length });
+  io.emit('recording', { count: session.recordings.length, unattended: entry.unattended });
+  if (entry.unattended) {
+    console.log(`A story is waiting for ${CHILD_NAME} in the morning.`);
+    io.emit('waiting-story', { title: activeStory().title, parent: PARENT_NAME });
+  }
   broadcastState();
 
   if (CAREGIVER_NUMBER && vonageNumber) {
@@ -506,11 +581,26 @@ app.get('/api/replay/latest', (req, res) => {
   // Prefer a recording whose audio actually landed on disk, but fall back to the most recent
   // one either way: the page turns and highlights are ours and replay fine on their own, so a
   // slow upload or a failed download degrades the keepsake instead of breaking it.
-  const withAudio = [...session.recordings].reverse().find((r) => r.url);
-  const latest = withAudio || session.recordings[session.recordings.length - 1];
+  const reversed = [...session.recordings].reverse();
+  // A story read to an empty room is the one the child has not heard; it wins over anything
+  // they were present for.
+  const latest =
+    reversed.find((r) => r.unattended && !r.seen && r.url) ||
+    reversed.find((r) => r.unattended && !r.seen) ||
+    reversed.find((r) => r.url) ||
+    session.recordings[session.recordings.length - 1];
   if (!latest) return res.status(404).json({ error: 'no recording yet' });
+  latest.seen = true;
+  broadcastState();
   const startTime = Date.parse(latest.start) || (latest.events[0]?.t ?? Date.now());
-  res.json({ audioUrl: latest.url || null, startTime, events: latest.events });
+  res.json({
+    audioUrl: latest.url || null,
+    startTime,
+    events: latest.events,
+    unattended: !!latest.unattended,
+    story: latest.story || session.storyId,
+    parentName: PARENT_NAME,
+  });
 });
 app.get('/api/recordings', (req, res) =>
   res.json(session.recordings.map(({ events, ...r }) => ({ ...r, events: events.length })))

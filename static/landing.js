@@ -36,10 +36,15 @@
     socket.on('connect', () => setStatus('waiting', 'Ready — waiting for a story call'));
     socket.on('disconnect', () => setStatus('error', 'Server disconnected'));
     socket.on('state', (s) => {
-      if (s.inCall) setStatus('live', `Story time — page ${s.page + 1} of ${s.totalPages}`);
+      showWaiting(s.waitingStories);
+      if (s.inCall) setStatus('live', s.unattended ? 'Reading for the morning…' : `Story time — page ${s.page + 1} of ${s.totalPages}`);
       else setStatus('waiting', s.recordings ? `Ready — ${s.recordings} saved stor${s.recordings === 1 ? 'y' : 'ies'}` : 'Ready — waiting for a story call');
     });
     socket.on('recording', () => setStatus('saved', "Tonight's story is saved"));
+    socket.on('waiting-story', ({ title, parent }) => {
+      showWaiting(1, title, parent);
+      setStatus('saved', `${parent} left a story for the morning`);
+    });
     // The parent may have picked a different book on their keypad.
     socket.on('story', (st) => {
       loadShelf();
@@ -63,6 +68,22 @@
   window.addEventListener('ouac:ring', () => setCompact(true));
 
   const preview = $('preview-btn');
+  const waitingNote = $('waiting-note');
+
+  // A story read to an empty room is waiting to be heard. Say so plainly, and only when true.
+  function showWaiting(count, title, parent) {
+    if (!count) {
+      waitingNote.hidden = true;
+      return;
+    }
+    const who = parent || 'Someone';
+    waitingNote.hidden = false;
+    waitingNote.innerHTML =
+      count === 1
+        ? `<b>${who} read you a story last night.</b> Open the storybook and press play.`
+        : `<b>${count} stories are waiting for you.</b> Open the storybook and press play.`;
+    if (title) waitingNote.title = title;
+  }
 
   // ---- the shelf ----
   // A caregiver sets this up before the call; the parent can still override it from their
