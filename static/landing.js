@@ -40,6 +40,12 @@
       else setStatus('waiting', s.recordings ? `Ready — ${s.recordings} saved stor${s.recordings === 1 ? 'y' : 'ies'}` : 'Ready — waiting for a story call');
     });
     socket.on('recording', () => setStatus('saved', "Tonight's story is saved"));
+    // The parent may have picked a different book on their keypad.
+    socket.on('story', (st) => {
+      loadShelf();
+      loadKeyLegend();
+      setStatus('live', `Tonight: ${st.title}`);
+    });
   }
 
   // Slim top bar once the scene is live (simulator starts immediately on laptops)
@@ -57,6 +63,75 @@
   window.addEventListener('ouac:ring', () => setCompact(true));
 
   const preview = $('preview-btn');
+
+  // ---- the shelf ----
+  // A caregiver sets this up before the call; the parent can still override it from their
+  // keypad once connected, which is why the buttons re-render on the server's 'story' event.
+  const GLYPH = { dragon: '🐉', rabbit: '🐰', boat: '⛵' };
+  const shelf = $('story-list');
+  let shelfBusy = false;
+
+  function renderShelf(data) {
+    shelf.innerHTML = '';
+    for (const st of data.stories) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'book';
+      b.setAttribute('aria-pressed', String(st.id === data.active));
+      b.innerHTML = `<span class="glyph" aria-hidden="true">${GLYPH[st.character] || '📖'}</span><span>${st.title}</span>`;
+      b.addEventListener('click', () => selectStory(st.id));
+      shelf.appendChild(b);
+    }
+  }
+
+  // Each story names its own 1/2/3 — the dragon roars, the boat sounds its foghorn — so the
+  // printed legend has to follow whichever book is on the shelf tonight.
+  async function loadKeyLegend() {
+    const list = $('keys');
+    if (!list) return;
+    let story;
+    try {
+      story = await (await fetch('/api/story')).json();
+    } catch (e) {
+      return;
+    }
+    [...list.querySelectorAll('li[data-fx]')].forEach((li) => li.remove());
+    for (const [key, fx] of Object.entries(story.effects || {})) {
+      const li = document.createElement('li');
+      li.dataset.fx = key;
+      li.innerHTML = `<kbd>${key}</kbd><span></span>`;
+      li.querySelector('span').textContent = fx.label;
+      list.appendChild(li);
+    }
+  }
+
+  async function loadShelf() {
+    try {
+      renderShelf(await (await fetch('/api/stories')).json());
+    } catch (e) {
+      shelf.innerHTML = '<span class="try-hint">Could not load the shelf.</span>';
+    }
+  }
+
+  async function selectStory(id) {
+    if (shelfBusy) return;
+    shelfBusy = true;
+    try {
+      const r = await fetch('/api/story/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (r.status === 409) setStatus('live', 'A story is being read — choose the next one after the call');
+      await Promise.all([loadShelf(), loadKeyLegend()]);
+    } catch (e) {
+      /* leave the shelf as it was */
+    } finally {
+      shelfBusy = false;
+    }
+  }
+  loadShelf();
+  loadKeyLegend();
 
   // XR Blocks injects its own "OPEN THE STORYBOOK" button; hide the landing when it's pressed.
   document.addEventListener('click', (e) => {

@@ -14,7 +14,7 @@ const VIEWPORTS = [
   { name: '4k     3840x2160', width: 3840, height: 2160 },
 ];
 
-const BLOCKS = ['.hero', '.call-card', '.keys-card', '.steps', '.links', '.foot'];
+const BLOCKS = ['.hero', '.call-card', '.story-card', '.keys-card', '.steps', '.links', '.foot'];
 const HERO_ITEMS = ['.brand', '.mini', '#status', '#toggle-landing'];
 const TRY_ITEMS = ['#preview-btn', '.try-hint'];
 
@@ -153,6 +153,19 @@ function overlaps(a, b) {
   console.log('extras:', JSON.stringify(extras));
   if (!extras.favicon) { console.log('FAIL  no favicon'); failures++; }
   if (!extras.cta) { console.log('FAIL  no preview CTA'); failures++; }
+  const shelf = await page.evaluate(() => {
+    const books = [...document.querySelectorAll('#story-list .book')];
+    return { count: books.length, titles: books.map((b) => b.textContent.trim()), pressed: books.filter((b) => b.getAttribute('aria-pressed') === 'true').length };
+  });
+  console.log('shelf:', JSON.stringify(shelf));
+  if (shelf.count < 2) { console.log('FAIL  shelf did not render multiple stories'); failures++; }
+  if (shelf.pressed !== 1) { console.log(`FAIL  expected exactly 1 selected story, got ${shelf.pressed}`); failures++; }
+  const legend = await page.evaluate(() =>
+    [...document.querySelectorAll('#keys li')].map((li) => li.textContent.trim())
+  );
+  console.log('legend:', JSON.stringify(legend));
+  if (legend.length !== 5) { console.log(`FAIL  keypad legend has ${legend.length} rows, expected 5`); failures++; }
+  if (legend.some((t) => !t)) { console.log('FAIL  keypad legend has an empty row'); failures++; }
   if (extras.liveRegions !== 1) { console.log(`FAIL  expected exactly 1 live region, found ${extras.liveRegions}`); failures++; }
 
   await page.screenshot({ path: 'expanded.png' });

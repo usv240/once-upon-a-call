@@ -10,6 +10,24 @@ Once Upon a Call turns that phone call into a *presence*. The parent dials in fr
 > with page turns, word highlighting and illustration effects — the same code paths a real call
 > drives — so you can see the entire experience without dialling anything.
 
+### The shelf
+
+Three stories ship with it, and the parent chooses one from their keypad before the reading
+starts — the titles are read aloud, they press a digit. A caregiver can also pick on the
+child's screen beforehand; whoever chooses last wins, and saying nothing simply keeps the
+current book.
+
+| Story | Character | For the child who… |
+|---|---|---|
+| The Little Dragon Who Couldn't Sleep | 🐉 | can't settle at bedtime |
+| The Rabbit Who Waited for the Moon | 🐰 | is waiting for someone to come back |
+| The Little Boat That Sailed Home | ⛵ | has a parent working far away |
+
+Adding a fourth is a writing job, not a drawing job: drop a JSON file in `static/stories/`
+naming a scene per page from the art engine's vocabulary, and it appears in the keypad menu,
+on the shelf and in the printed card with no code change. `npm test` will tell you if you
+name a scene or a keyword that can never fire.
+
 Built for the **DIALED IN Builder Challenge** (CreateHER Fest × Vonage), Washington DC cohort.
 Lenses: **Access** and **Connection** (with a good helping of Play).
 
@@ -33,13 +51,15 @@ Existing products (Caribu, Readeo, Storybook Dads, United Through Reading) are e
 
 ```
 Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
-                          │  NCCO: talk (welcome) → [input PIN if not approved] → record → connect{app}
+                          │  NCCO: talk (welcome) → [input PIN if not approved]
+                          │        → input (choose tonight's story) → record → connect{app}
                           ▼
                  Child's WebXR app (Vonage Client SDK leg, XR Blocks)
                           │
    Vonage async DTMF ─────┼──▶ /voice/dtmf ──▶ socket.io ──▶ page turn / effect in AR
    Parent's audio  ───────┼──▶ lip-synced avatar  +  Deepgram streaming ASR ──▶ words light up
    Child taps ⭐  ────────┼──▶ /api/say ──▶ PUT /calls/{parentLeg}/talk ──▶ only the parent hears it
+   Keypad at the menu ────┼──▶ /voice/story-choice ──▶ tonight's book, chosen without a screen
    Hang-up ───────────────┴──▶ /voice/recording ──▶ mp3 downloaded ──▶ Replay mode (+ SMS to caregiver)
 
    No phone to hand?  ▶ Watch the story ──▶ browser speech synthesis narrates the same book,
@@ -52,7 +72,7 @@ Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
 |---|---|---|
 | **Client SDK in-app voice** | `static/VonageAudioCall.js`, `/token` | The child's XR app is a call leg; the WebRTC stream drives the lip-sync avatar |
 | **NCCO `talk`** | `/voice/answer` | Welcome + keypad instructions for a screenless caller |
-| **NCCO `input` (DTMF)** | `/voice/answer`, `/voice/pin` | Family PIN gate for numbers not on the allow-list — child safety |
+| **NCCO `input` (DTMF)** | `/voice/answer`, `/voice/pin`, `/voice/story-choice` | Family PIN gate for numbers not on the allow-list, and choosing tonight's book from a menu read aloud — the parent picks a story without ever seeing a screen |
 | **NCCO `record`** | `/voice/answer`, `/voice/recording` | Every story becomes a keepsake |
 | **Asynchronous DTMF** (`PUT /calls/{uuid}/input/dtmf`) | `subscribeDTMF`, `/voice/dtmf` | A 1970s keypad becomes an AR controller: `#` next page, `*` back, `1-3` effects |
 | **Per-leg TTS** (`PUT /calls/{uuid}/talk`) | `/api/say` | The AR world talks back *only* into the parent's ear |
@@ -83,6 +103,8 @@ Vonage must be able to reach your server. On GitHub Codespaces the public URL is
 
 Optional `.env`:
 ```
+CHILD_NAME=Maya                             # spoken in the menu and on the last page
+PARENT_NAME=Dad                             # who the child is sending messages to
 APPROVED_NUMBERS=17045551234,17045556789   # who may enter the child's room
 FAMILY_PIN=2468                             # everyone else is asked for this
 CAREGIVER_NUMBER=17045551234                # SMS when a story is saved
@@ -120,7 +142,8 @@ index.js                  Express + socket.io server, all Vonage webhooks and AP
 static/VonageAudioCall.js XR Blocks script: call UI, avatar, storybook wiring, replay
 static/Storybook.js       Canvas-textured AR book: text highlighting + living illustration
 static/StoryListener.js   Deepgram streaming ASR from the call's remote stream + reading tracker
-static/story.json         The story (pages, keyword → effect map, keypad effects)
+static/stories/*.json     The shelf. One file per story: pages, scene per page,
+                          keyword → effect map, keypad effects, menu label
 static/main.js            XR Blocks bootstrap
 pages/index.html          Import map (XR Blocks pinned), Client SDK, socket.io
 ```
@@ -130,14 +153,15 @@ pages/index.html          Import map (XR Blocks pinned), Client SDK, socket.io
 ```bash
 npm test              # narration sync + story-data integrity, no browser needed
 npm run fixture &     # static server on :3210 (no Vonage credentials required)
-npm run test:layout   # drives your installed Chrome across 4 viewport sizes
+npm run test:browser  # layout + companion pages + illustrations, in your installed Chrome
 ```
 
 **`test/preview.test.js`** covers the one piece of the preview tour that fails invisibly when
 it is wrong: mapping a speech-synthesis character offset to a word index. Browsers disagree on
 whether that offset lands on a word's first letter or the space before it, and a drifting
 highlight looks like a rendering glitch rather than a bug. It also asserts every keyword in
-`story.json` actually occurs in its page text, so no illustration effect is unreachable.
+every story actually occurs in its own page text, that every page names a scene the art
+engine can draw, and that no `{placeholder}` would be read aloud literally.
 
 **`test/layout.test.js`** loads the landing overlay at 390 / 1280 / 1920 / 3840 px wide, in both
 the expanded-guide and compact-top-bar states, and fails if any two blocks overlap, anything is
@@ -146,7 +170,16 @@ the compact bar grows past a thin strip, or the "Watch the story" button is miss
 to hit. It writes `expanded.png` / `compact.png` for a visual check. Edit `CHROME` at the top of
 the file if your Chrome lives somewhere else.
 
-`test/serve-fixture.js` exists so the layout test runs on a laptop with no `.env` — `index.js`
+**`test/art.test.js`** renders every page of every story in a real browser, fires every effect
+that page can fire, runs a few animation frames and counts how much non-paper ink landed on
+the canvas. The illustrations are procedural, so a typo in `drawRabbit` does not crash
+anything — it just draws nothing, and nobody notices until a judge is watching the video.
+This check caught exactly that: a refactor silently removed `drawDragon`.
+
+**`test/pages.test.js`** smoke-tests the caregiver and printable parent-card pages for console
+errors and missing content.
+
+`test/serve-fixture.js` exists so the browser tests run on a laptop with no `.env` — `index.js`
 correctly refuses to boot without real Vonage credentials.
 
 ## Safety & privacy
@@ -157,7 +190,7 @@ correctly refuses to boot without real Vonage credentials.
 ## Path to the real world
 - **Pilot partners**: United Through Reading (300+ story stations on bases), Storybook Dads / Project Bedtime Story (prison reading programs), children's hospitals' child-life departments.
 - **Where it runs**: any WebXR device (Android XR, Quest browser) or a plain laptop/phone — the *child's* side can be a $150 tablet; the *parent's* side is any phone, including institutional phone systems that allow approved numbers.
-- **Next**: multiple families (per-child rooms keyed by the number dialed), a library of licensed picture books, illustrator-drawn scenes, and a Vonage Verify flow for caregivers to approve new callers by SMS.
+- **Next**: multiple families (per-child rooms keyed by the number dialed), licensed picture books alongside the original ones, illustrator-drawn scenes, and a Vonage Verify flow for caregivers to approve new callers by SMS.
 
 ## References
 1. The Sentencing Project, *Parents in Prison* (2022). https://www.sentencingproject.org/app/uploads/2022/09/Parents-in-Prison.pdf

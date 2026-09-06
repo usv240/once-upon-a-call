@@ -1,12 +1,17 @@
 {
+  "id": "dragon",
+  "order": 1,
   "title": "The Little Dragon Who Couldn't Sleep",
+  "menuLabel": "the little dragon who couldn't sleep",
+  "character": "dragon",
   "childName": "Maya",
+  "parentName": "Dad",
   "pages": [
     {
       "text": "Once upon a time, in a cozy cave on top of a hill, lived a little dragon named Pip.",
       "scene": "cave",
       "keywords": {
-        "dragon": "dragon-wiggle",
+        "dragon": "hero-wiggle",
         "cave": "cave-glow"
       }
     },
@@ -15,19 +20,19 @@
       "scene": "stars",
       "keywords": {
         "stars": "stars-twinkle",
-        "asleep": "yawn"
+        "asleep": "eyes-close"
       }
     },
     {
       "text": "So Pip flew up, up, up into the sky, and asked the moon for a lullaby.",
       "scene": "moon",
       "keywords": {
-        "flew": "dragon-fly",
+        "flew": "hero-fly",
         "moon": "moon-smile"
       }
     },
     {
-      "text": "The moon sang softly, and Pip's eyes grew heavy. Goodnight, little dragon. Goodnight, Maya.",
+      "text": "The moon sang softly, and Pip's eyes grew heavy. Goodnight, little dragon. Goodnight, {child}.",
       "scene": "sleep",
       "keywords": {
         "goodnight": "lights-dim",
@@ -48,6 +53,5 @@
       "label": "Moon hum",
       "sound": "hum"
     }
-  },
-  "parentName": "Dad"
+  }
 }

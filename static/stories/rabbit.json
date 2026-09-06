@@ -1,0 +1,57 @@
+{
+  "id": "rabbit",
+  "order": 2,
+  "title": "The Rabbit Who Waited for the Moon",
+  "menuLabel": "the rabbit who waited for the moon",
+  "character": "rabbit",
+  "childName": "Maya",
+  "parentName": "Dad",
+  "pages": [
+    {
+      "text": "In a burrow under the old oak tree lived a small brown rabbit named Juniper, who was very good at waiting.",
+      "scene": "burrow",
+      "keywords": {
+        "burrow": "cave-glow",
+        "rabbit": "hero-wiggle"
+      }
+    },
+    {
+      "text": "Every evening Juniper sat in the meadow and watched the sky, because the moon had promised to come back.",
+      "scene": "meadow",
+      "keywords": {
+        "meadow": "hero-hop",
+        "sky": "stars-twinkle"
+      }
+    },
+    {
+      "text": "Some nights the clouds were thick and the moon was hidden. Juniper waited anyway. Waiting is a kind of loving.",
+      "scene": "stars",
+      "keywords": {
+        "clouds": "lights-dim",
+        "waited": "hero-wiggle"
+      }
+    },
+    {
+      "text": "And then, quiet as anything, the moon rose over the hill. There you are, said Juniper. Goodnight, {child}.",
+      "scene": "sleep",
+      "keywords": {
+        "moon": "moon-smile",
+        "goodnight": "eyes-close"
+      }
+    }
+  ],
+  "effects": {
+    "1": {
+      "label": "Rabbit thump",
+      "sound": "roar"
+    },
+    "2": {
+      "label": "Twinkle",
+      "sound": "twinkle"
+    },
+    "3": {
+      "label": "Moon hum",
+      "sound": "hum"
+    }
+  }
+}

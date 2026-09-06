@@ -1,0 +1,57 @@
+{
+  "id": "boat",
+  "order": 3,
+  "title": "The Little Boat That Sailed Home",
+  "menuLabel": "the little boat that sailed home",
+  "character": "boat",
+  "childName": "Maya",
+  "parentName": "Dad",
+  "pages": [
+    {
+      "text": "There was once a little blue boat who worked far away, on a sea so wide you could not see the other side.",
+      "scene": "sea",
+      "keywords": {
+        "boat": "hero-wiggle",
+        "sea": "hero-rock"
+      }
+    },
+    {
+      "text": "One night the wind came up and the waves grew tall, and the little boat held on tight and thought of home.",
+      "scene": "storm",
+      "keywords": {
+        "wind": "hero-rock",
+        "waves": "lights-dim"
+      }
+    },
+    {
+      "text": "When the storm passed, the stars came out, and every single one of them was pointing the same way.",
+      "scene": "stars",
+      "keywords": {
+        "stars": "stars-twinkle",
+        "pointing": "hero-fly"
+      }
+    },
+    {
+      "text": "So the little boat sailed home, all night, until the harbour lights were shining. Goodnight, {child}.",
+      "scene": "harbour",
+      "keywords": {
+        "home": "moon-smile",
+        "goodnight": "lights-dim"
+      }
+    }
+  ],
+  "effects": {
+    "1": {
+      "label": "Foghorn",
+      "sound": "roar"
+    },
+    "2": {
+      "label": "Twinkle",
+      "sound": "twinkle"
+    },
+    "3": {
+      "label": "Sea hum",
+      "sound": "hum"
+    }
+  }
+}

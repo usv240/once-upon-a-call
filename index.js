@@ -3,7 +3,7 @@
 //
 // Vonage Voice API features used:
 //   1. Client SDK in-app leg    — the child's WebXR app answers the call     (/token, connect{app})
-//   2. NCCO input (DTMF)        — family PIN for callers not on the allow-list (/voice/pin)
+//   2. NCCO input (DTMF)        — family PIN, and choosing tonight's story from the shelf
 //   3. NCCO record              — every story saved as a keepsake             (/voice/recording)
 //   4. Asynchronous DTMF        — the parent's keypad turns AR pages          (subscribeDTMF, /voice/dtmf)
 //   5. Per-leg text-to-speech   — the AR world talks back to the parent only  (playTTS)
@@ -62,12 +62,60 @@ console.log('Public base URL:', BASE_URL);
 console.log('Approved callers:', APPROVED_NUMBERS.length ? APPROVED_NUMBERS : '(open demo mode)');
 console.log('Family PIN:', FAMILY_PIN ? 'set' : 'not set');
 
-// ---------- story + session state (one family for the demo) ----------
-const story = require('./static/story.json');
+// ---------- story library + session state (one family for the demo) ----------
+// Stories are plain JSON in static/stories. Drop another file in and it appears in the
+// keypad menu and the picker with no code change.
+const STORIES_DIR = path.join(__dirname, 'static', 'stories');
+function loadStories() {
+  let files = [];
+  try {
+    files = fs.readdirSync(STORIES_DIR).filter((f) => f.endsWith('.json')).sort();
+  } catch (e) {
+    /* no library directory */
+  }
+  const loaded = files
+    .map((f) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(STORIES_DIR, f), 'utf8'));
+      } catch (e) {
+        console.warn(`Skipping unreadable story ${f}:`, e.message);
+        return null;
+      }
+    })
+    .filter(Boolean);
+  // Explicit `order` decides the keypad menu and which story is the default, so adding a
+  // file cannot silently change what a caller hears first.
+  loaded.sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || String(a.id).localeCompare(String(b.id)));
+  if (!loaded.length) {
+    console.error(`No readable stories in ${STORIES_DIR}. Add at least one .json story file.`);
+    process.exit(1);
+  }
+  return loaded;
+}
+const STORIES = loadStories();
+
+// One family per server for the demo, so the names live in the environment rather than in
+// every story file. Story text uses {child} / {parent} placeholders.
+const CHILD_NAME = process.env.CHILD_NAME || STORIES[0].childName || 'your child';
+const PARENT_NAME = process.env.PARENT_NAME || STORIES[0].parentName || 'Parent';
+
+function personalise(raw) {
+  const fill = (t) => String(t).replaceAll('{child}', CHILD_NAME).replaceAll('{parent}', PARENT_NAME);
+  return {
+    ...raw,
+    childName: CHILD_NAME,
+    parentName: PARENT_NAME,
+    pages: raw.pages.map((pg) => ({ ...pg, text: fill(pg.text) })),
+  };
+}
+
+console.log(`Story library: ${STORIES.map((s) => s.id || s.title).join(', ')}`);
+
 const RECORDINGS_DIR = path.join(__dirname, 'recordings');
 fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
 const session = {
+  storyId: STORIES[0].id || 'default',
   userLoggedIn: null, // Client SDK username of the child's XR app
   parentLeg: null, // uuid of the parent's PSTN leg (for per-leg TTS + DTMF)
   parentNumber: null,
@@ -77,9 +125,29 @@ const session = {
   recordings: [], // { file, url, uuid, start, end, size, events }
 };
 
+// The active story, already personalised. Everything downstream reads this.
+function activeStory() {
+  const raw = STORIES.find((s) => (s.id || 'default') === session.storyId) || STORIES[0];
+  return personalise(raw);
+}
+
+function setStory(id, why) {
+  const found = STORIES.find((s) => (s.id || 'default') === id);
+  if (!found) return false;
+  session.storyId = id;
+  session.page = 0;
+  console.log(`Story set to "${found.title}" (${why})`);
+  io.emit('story', { id: session.storyId, title: found.title });
+  broadcastState();
+  return true;
+}
+
 function publicState() {
+  const story = activeStory();
   return {
     page: session.page,
+    storyId: session.storyId,
+    storyTitle: story.title,
     totalPages: story.pages.length,
     inCall: !!session.parentLeg,
     recordings: session.recordings.length,
@@ -132,7 +200,31 @@ app.get('/token', async (req, res) => {
 });
 
 // ---------- NCCO builders ----------
+// Offered before the story starts, and only when there is more than one book on the shelf.
+// The parent has no screen, so the shelf is read to them and chosen with the same keypad that
+// will turn the pages a moment later.
+function menuNCCO() {
+  const choices = STORIES.slice(0, 9)
+    .map((s, i) => `Press ${i + 1} for ${s.menuLabel || s.title}.`)
+    .join(' ');
+  return [
+    {
+      action: 'talk',
+      language: 'en-US',
+      bargeIn: true,
+      text: `Welcome to Once Upon a Call. Tonight you can read ${CHILD_NAME} one of ${STORIES.length} stories. ${choices}`,
+    },
+    {
+      action: 'input',
+      type: ['dtmf'],
+      dtmf: { maxDigits: 1, timeOut: 8 },
+      eventUrl: [`${BASE_URL}/voice/story-choice`],
+    },
+  ];
+}
+
 function storyNCCO(from) {
+  const story = activeStory();
   if (!session.userLoggedIn) {
     return [
       {
@@ -146,7 +238,7 @@ function storyNCCO(from) {
     {
       action: 'talk',
       language: 'en-US',
-      text: `Welcome to Once Upon a Call. Opening ${story.childName}'s storybook. Press pound to turn the page, star to go back, and one, two or three for surprises.`,
+      text: `Opening ${story.title}. Press pound to turn the page, star to go back, and one, two or three for surprises.`,
     },
     {
       // Records from here until hangup; Vonage posts the file URL to /voice/recording
@@ -192,7 +284,7 @@ app.get('/voice/answer', (req, res) => {
     if (!allowed) {
       return res.json([{ action: 'talk', language: 'en-US', text: 'Sorry, this number is not on the family list. Goodbye.' }]);
     }
-    return res.json(storyNCCO(req.query.from));
+    return res.json(STORIES.length > 1 ? menuNCCO() : storyNCCO(req.query.from));
   }
 
   // App -> phone / app -> app (kept from the workshop kit)
@@ -208,8 +300,20 @@ app.get('/voice/answer', (req, res) => {
 app.post('/voice/pin', (req, res) => {
   const digits = String(req.body?.dtmf?.digits || '').trim();
   console.log('PIN entered:', digits ? '****' : '(none)');
-  if (digits && digits === FAMILY_PIN) return res.json(storyNCCO(req.body.from));
+  if (digits && digits === FAMILY_PIN) {
+    return res.json(STORIES.length > 1 ? menuNCCO() : storyNCCO(req.body.from));
+  }
   return res.json([{ action: 'talk', language: 'en-US', text: "That PIN isn't right. Goodbye." }]);
+});
+
+// Keypad choice from menuNCCO. No input, or a digit off the end of the shelf, quietly keeps
+// whatever was already selected — a parent who says nothing still gets a story.
+app.post('/voice/story-choice', (req, res) => {
+  const digit = String(req.body?.dtmf?.digits || '').trim();
+  const picked = STORIES[Number(digit) - 1];
+  if (picked) setStory(picked.id || 'default', `chosen on the keypad: ${digit}`);
+  else console.log(`Story menu: no usable choice (${digit || 'timeout'}), keeping ${session.storyId}`);
+  res.json(storyNCCO(req.body?.from));
 });
 
 // ---------- call lifecycle ----------
@@ -256,7 +360,8 @@ app.post('/voice/dtmf', (req, res) => {
   if (!digit) return console.log('DTMF webhook with no digit:', JSON.stringify(b));
   console.log('KEYPAD:', digit);
 
-  if (digit === '#') session.page = Math.min(session.page + 1, story.pages.length - 1);
+  const pageCount = activeStory().pages.length;
+  if (digit === '#') session.page = Math.min(session.page + 1, pageCount - 1);
   else if (digit === '*') session.page = Math.max(session.page - 1, 0);
 
   if (digit === '#' || digit === '*') mark('page', { page: session.page });
@@ -302,7 +407,7 @@ app.post('/voice/recording', async (req, res) => {
         new SMS({
           to: CAREGIVER_NUMBER,
           from: vonageNumber,
-          text: `Once Upon a Call: tonight's story "${story.title}" was read to ${story.childName} and saved. Replay it anytime in the storybook.`,
+          text: `Once Upon a Call: tonight's story "${activeStory().title}" was read to ${CHILD_NAME} and saved. Replay it anytime in the storybook.`,
         })
       );
       console.log('Caregiver SMS sent');
@@ -338,8 +443,30 @@ app.post('/api/say', async (req, res) => {
 });
 
 // ---------- misc API ----------
-app.get('/api/story', (req, res) => res.json(story));
+app.get('/api/story', (req, res) => res.json(activeStory()));
+
+// The shelf, and the child's way of choosing from it.
+app.get('/api/stories', (req, res) =>
+  res.json({
+    active: session.storyId,
+    stories: STORIES.map((s) => ({
+      id: s.id || 'default',
+      title: s.title,
+      character: s.character || 'dragon',
+      pages: s.pages.length,
+    })),
+  })
+);
+
+app.post('/api/story/select', (req, res) => {
+  if (session.parentLeg) return res.status(409).json({ error: 'not while a story is being read' });
+  if (!setStory(String(req.body?.id || ''), 'chosen in the storybook')) {
+    return res.status(404).json({ error: 'no such story' });
+  }
+  res.json({ ok: true, active: session.storyId });
+});
 app.get('/api/info', (req, res) => {
+  const story = activeStory();
   const d = String(vonageNumber || '').replace(/\D/g, '');
   const phoneFormatted =
     d.length === 11 && d.startsWith('1') ? `+1 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}` : d ? `+${d}` : '';
@@ -365,6 +492,7 @@ app.get('/api/health', (req, res) => {
     callerAllowList: APPROVED_NUMBERS.length > 0,
     familyPin: !!FAMILY_PIN,
     savedStories: session.recordings.length,
+    storiesOnShelf: STORIES.length,
   };
   const required = ['vonageApp', 'phoneNumber', 'publicUrl'];
   res.json({ ready: required.every((k) => checks[k]), baseUrl: BASE_URL, checks });

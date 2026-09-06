@@ -567,6 +567,21 @@ export class VonageAudioCall extends xb.Script {
       }
     });
     this.socket.on('effect', ({ key }) => this._playEffectKey(key));
+    // Someone changed tonight's book — on the landing page, or on the parent's keypad as the
+    // call connects. Drop the old one so the next preview or call builds the right story.
+    this.socket.on('story', async () => {
+      this._stopPreview();
+      try {
+        this.story = await (await fetch('/api/story')).json();
+      } catch (e) {
+        console.warn('Could not reload the story', e);
+        return;
+      }
+      if (!this.callId) {
+        this._removeBook();
+        this._setStatus(this.story.title);
+      }
+    });
     this.socket.on('recording', ({ count }) => {
       this.state.recordings = count;
       if (this.book) this.book.setBanner('Tonight\'s story is saved 📖');

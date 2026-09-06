@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>Storybook art harness</title>
+<link rel="icon" href="data:," />
+<body style="margin:0;background:#111">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js" } }
+</script>
+<script type="module">
+  import { Storybook } from '/Storybook.js';
+  window.__ready = false;
+  window.__renderStory = async (id) => {
+    const story = await (await fetch('/api/story?id=' + id)).json();
+    const book = new Storybook(story);
+    const out = [];
+    for (let i = 0; i < story.pages.length; i++) {
+      book.setPage(i);
+      // exercise every effect this page can fire, plus the animation loop
+      for (const fx of Object.values(story.pages[i].keywords || {})) book.trigger(fx, 5);
+      book.trigger('roar', 5);
+      book.highlightUpTo(3);
+      book.setCaption('checking the caption strip');
+      book.setBanner('checking the banner');
+      for (let f = 0; f < 6; f++) book.update(1 / 30);
+      const c = book.canvas.getContext('2d');
+      const d = c.getImageData(0, 0, book.canvas.width, book.canvas.height).data;
+      // how much of the illustration half is non-paper? blank art would be ~0
+      let ink = 0;
+      for (let px = 0; px < d.length; px += 4 * 97) {
+        if (d[px + 3] > 10 && !(d[px] > 240 && d[px + 1] > 235 && d[px + 2] > 215)) ink++;
+      }
+      out.push({ page: i + 1, scene: story.pages[i].scene, inkSamples: ink });
+    }
+    return { id, character: story.character, title: story.title, pages: out };
+  };
+  window.__ready = true;
+</script>

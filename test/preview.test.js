@@ -14,7 +14,20 @@ const src = fs.readFileSync(path.join(__dirname, '../static/StoryListener.js'), 
 const body = src.slice(src.indexOf('export function wordIndexAtChar')).replace('export function', 'function');
 const wordIndexAtChar = new Function(`${body}; return wordIndexAtChar;`)();
 
-const story = JSON.parse(fs.readFileSync(path.join(__dirname, '../static/story.json'), 'utf8'));
+const STORIES_DIR = path.join(__dirname, '../static/stories');
+const stories = fs
+  .readdirSync(STORIES_DIR)
+  .filter((f) => f.endsWith('.json'))
+  .map((f) => ({ file: f, ...JSON.parse(fs.readFileSync(path.join(STORIES_DIR, f), 'utf8')) }))
+  .sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+const story = stories[0]; // the default book, used for the word-sync cases below
+
+// Scene names are looked up in Storybook.js's SCENES table; an unknown one silently falls back
+// to the wrong backdrop, which is exactly the kind of thing nobody notices until it is filmed.
+const bookSrc = fs.readFileSync(path.join(__dirname, '../static/Storybook.js'), 'utf8');
+const SCENE_NAMES = (bookSrc.slice(bookSrc.indexOf('const SCENES = {')).split('};')[0].match(/^\s{2}(\w+):/gm) || [])
+  .map((m) => m.trim().replace(':', ''));
+const CHARACTERS = ['dragon', 'rabbit', 'boat'];
 
 let failures = 0;
 function check(name, fn) {
@@ -46,8 +59,8 @@ check('runs of whitespace do not create phantom words', () => {
 
 // The count must never exceed what the book will actually render, or highlightUpTo silently
 // clamps and the last word never lights.
-check('never exceeds the book\'s own word count, on every real page', () => {
-  for (const page of story.pages) {
+check('never exceeds the book\'s own word count, on every page of every story', () => {
+  for (const page of stories.flatMap((s) => s.pages)) {
     const rendered = page.text.split(/\s+/).filter(Boolean).length;
     for (let i = 0; i <= page.text.length; i++) {
       const n = wordIndexAtChar(page.text, i);
@@ -67,20 +80,72 @@ check('monotonic across a whole page', () => {
   }
 });
 
-// Every keyword in story.json must actually occur in its page text, or the illustration
-// effect can never fire — in the preview or on a real call.
-check('every story keyword appears in its page text', () => {
-  story.pages.forEach((page, i) => {
-    for (const word of Object.keys(page.keywords || {})) {
-      assert.ok(page.text.toLowerCase().includes(word.toLowerCase()), `page ${i + 1} has no "${word}"`);
-    }
-  });
+// ---- the shelf ----
+check('the shelf is not empty and the scene table was parsed', () => {
+  assert.ok(stories.length >= 1, 'no stories found in static/stories');
+  assert.ok(SCENE_NAMES.length >= 4, `parsed only ${SCENE_NAMES.length} scene names from Storybook.js`);
 });
 
-check('every keypad effect maps to a sound', () => {
-  for (const [key, fx] of Object.entries(story.effects || {})) {
-    assert.ok(fx.sound, `key ${key} has no sound`);
-    assert.ok(fx.label, `key ${key} has no label`);
+check('story ids, orders and menu labels are unique and present', () => {
+  const ids = new Set();
+  const orders = new Set();
+  for (const st of stories) {
+    assert.ok(st.id, `${st.file} has no id`);
+    assert.ok(st.title, `${st.file} has no title`);
+    assert.ok(st.menuLabel, `${st.file} has no menuLabel (the keypad menu reads it aloud)`);
+    assert.ok(!ids.has(st.id), `duplicate id ${st.id}`);
+    assert.ok(!orders.has(st.order), `duplicate order ${st.order} on ${st.file}`);
+    ids.add(st.id);
+    orders.add(st.order);
+  }
+});
+
+check('every page names a scene the art engine can draw', () => {
+  for (const st of stories) {
+    st.pages.forEach((page, i) => {
+      assert.ok(page.scene, `${st.id} page ${i + 1} has no scene`);
+      assert.ok(SCENE_NAMES.includes(page.scene), `${st.id} page ${i + 1}: unknown scene "${page.scene}" (have: ${SCENE_NAMES.join(', ')})`);
+    });
+  }
+});
+
+check('every story has a character the art engine can draw', () => {
+  for (const st of stories) {
+    assert.ok(CHARACTERS.includes(st.character), `${st.id}: unknown character "${st.character}"`);
+  }
+});
+
+// A keyword that never occurs in its own page text can never fire its effect — on a real call
+// or in the preview. Silent, and invisible without this check.
+check('every keyword appears in its own page text, in every story', () => {
+  for (const st of stories) {
+    st.pages.forEach((page, i) => {
+      for (const word of Object.keys(page.keywords || {})) {
+        assert.ok(page.text.toLowerCase().includes(word.toLowerCase()), `${st.id} page ${i + 1} has no "${word}"`);
+      }
+    });
+  }
+});
+
+check('every keypad effect maps to a label and a sound, in every story', () => {
+  for (const st of stories) {
+    for (const [key, fx] of Object.entries(st.effects || {})) {
+      assert.ok(fx.sound, `${st.id} key ${key} has no sound`);
+      assert.ok(fx.label, `${st.id} key ${key} has no label`);
+    }
+  }
+});
+
+// The last page is read aloud by a parent to a named child; a stray placeholder would be
+// spoken literally.
+check('no unresolved placeholders other than {child} / {parent}', () => {
+  for (const st of stories) {
+    for (const page of st.pages) {
+      const found = page.text.match(/\{[a-z]+\}/gi) || [];
+      for (const ph of found) {
+        assert.ok(['{child}', '{parent}'].includes(ph), `${st.id}: unknown placeholder ${ph}`);
+      }
+    }
   }
 });
 

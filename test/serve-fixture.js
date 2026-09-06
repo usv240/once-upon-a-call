@@ -23,9 +23,20 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(STUBS[url]));
   }
-  if (url === '/api/story') {
+  if (url === '/api/stories') {
+    const dir = path.join(ROOT, 'static/stories');
+    const stories = fs.readdirSync(dir).filter((f) => f.endsWith('.json'))
+      .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))
+      .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+      .map((s) => ({ id: s.id, title: s.title, character: s.character, pages: s.pages.length }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(fs.readFileSync(path.join(ROOT, 'static/story.json')));
+    return res.end(JSON.stringify({ active: stories[0] && stories[0].id, stories }));
+  }
+  if (url === '/api/story') {
+    const id = (req.url.split('id=')[1] || 'dragon').split('&')[0];
+    const file = path.join(ROOT, 'static/stories', `${path.basename(id)}.json`);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(fs.readFileSync(fs.existsSync(file) ? file : path.join(ROOT, 'static/stories/dragon.json')));
   }
   // socket.io is not running here; hand back an empty script so `typeof io === 'undefined'`
   // and landing.js takes its no-socket path instead of throwing.
@@ -35,7 +46,7 @@ const server = http.createServer((req, res) => {
   }
 
   const rel = url === '/' ? 'pages/index.html' : url.slice(1);
-  for (const dir of ['pages', 'static', '.']) {
+  for (const dir of ['pages', 'static', 'test', '.']) {
     const file = path.join(ROOT, dir, rel.replace(/^(pages|static)\//, ''));
     if (fs.existsSync(file) && fs.statSync(file).isFile()) {
       res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });

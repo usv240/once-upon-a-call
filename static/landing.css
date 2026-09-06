@@ -99,6 +99,21 @@ h1 { font-size: var(--fs-xl); margin: 0; font-weight: 600; letter-spacing: 0.01e
 .cta[disabled] { opacity: 0.55; cursor: default; box-shadow: none; }
 .try-hint { color: var(--muted); font-size: var(--fs-sm); font-family: system-ui, sans-serif; }
 
+/* The shelf: one button per story, wrapping on narrow screens. */
+.shelf { display: flex; flex-wrap: wrap; gap: 0.5em; margin-top: 0.5em; }
+.book {
+  flex: 1 1 12rem; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 0.6em;
+  padding: 0.55em 0.9em; border-radius: var(--radius);
+  background: rgba(255, 247, 230, 0.06); border: 1px solid var(--border);
+  color: var(--ink); font: var(--fs-md) Georgia, serif;
+  text-transform: none;
+}
+.book:hover { border-color: var(--amber); background: rgba(255, 213, 74, 0.12); }
+.book[aria-pressed="true"] { background: rgba(255, 213, 74, 0.18); border-color: var(--amber); color: var(--amber); }
+.book .glyph { flex: none; font-size: 1.3em; line-height: 1; }
+.book[disabled] { opacity: 0.5; cursor: default; }
+
 .keys { list-style: none; margin: 0.5em 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.6em 1.2em; }
 .keys li { display: flex; align-items: center; gap: 0.6em; font-size: var(--fs-md); }
 kbd {
@@ -143,6 +158,7 @@ kbd {
 #landing.compact .mini kbd { width: 1.8em; height: 1.8em; font-size: 0.85em; border-radius: 0.4em; box-shadow: 0 0.12em 0 #b39b6a; }
 #landing.compact .status { margin-left: auto; }
 #landing.compact .card,
+#landing.compact .shelf,
 #landing.compact .steps,
 #landing.compact .links,
 #landing.compact .foot { display: none; }

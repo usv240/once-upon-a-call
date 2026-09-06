@@ -4,10 +4,11 @@
   "scripts": {
     "start": "node index.js",
     "test": "node test/preview.test.js",
-    "test:layout": "node test/layout.test.js http://localhost:3210/",
     "fixture": "node test/serve-fixture.js 3210",
+    "test:layout": "node test/layout.test.js http://localhost:3210/",
     "test:pages": "node test/pages.test.js http://localhost:3210",
-    "test:browser": "node test/layout.test.js http://localhost:3210/ && node test/pages.test.js http://localhost:3210"
+    "test:art": "node test/art.test.js http://localhost:3210",
+    "test:browser": "node test/layout.test.js http://localhost:3210/ && node test/pages.test.js http://localhost:3210 && node test/art.test.js http://localhost:3210"
   },
   "dependencies": {
     "@vonage/jwt": "^1.12.1",

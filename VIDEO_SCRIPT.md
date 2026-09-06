@@ -22,8 +22,11 @@ even if the network, the Codespace or the phone lets you down. Never film a brok
 
 **0:45 – 1:10 — The call**
 Screen: app open, "Waiting for a story call…". Phone in frame: dial the Vonage number.
-Phone audio (let it play): *"Welcome to Once Upon a Call. Opening Maya's storybook. Press pound to turn the page…"*
-Click answer. Avatar appears beside the book; mouth moves as you talk.
+Phone audio (let it play): *"Welcome to Once Upon a Call. Tonight you can read Maya one of 3 stories. Press 1 for the little dragon who couldn't sleep…"*
+**Press 2 on the keypad** — pick the rabbit, then let it turn: the shelf on screen switches to
+The Rabbit Who Waited for the Moon before a word is read.
+> "The parent chooses tonight's book from a keypad menu. They never see a screen."
+Then let it connect. Avatar appears beside the book; mouth moves as you talk.
 > "That's a real PSTN call through the Vonage Voice API, answered by the Vonage Client SDK inside a WebXR app built with XR Blocks."
 
 **1:10 – 1:50 — Reading + highlighting**
@@ -56,6 +59,7 @@ GitHub link on screen.
 
 **Shot checklist**
 - [ ] Phone dialing, audible welcome prompt
+- [ ] Story menu read aloud + a digit pressed to choose the book
 - [ ] Avatar mouth moving with your voice
 - [ ] Words highlighting (needs DEEPGRAM_API_KEY)
 - [ ] `#` page turn + `1` roar, with terminal `KEYPAD:` cut

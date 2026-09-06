@@ -15,6 +15,20 @@ const H = 1000;
 const PAGE_W = 1.3; // metres
 const PAGE_H = PAGE_W * (H / W);
 
+// Scene name -> backdrop. Stories name a scene per page; the art lives here rather than in the
+// story files, so writing a new story stays a writing job instead of a drawing job.
+const SCENES = {
+  cave:    { top: '#1b2a5a', bottom: '#3b2a1a', stars: 12, moon: false, ground: 'cave',   groundColor: '#4a3524' },
+  stars:   { top: '#1b2a5a', bottom: '#2c3e7a', stars: 40, moon: true,  ground: 'hill',   groundColor: '#22335f' },
+  moon:    { top: '#1b2a5a', bottom: '#2c3e7a', stars: 40, moon: true,  ground: 'hill',   groundColor: '#22335f' },
+  sleep:   { top: '#0b1030', bottom: '#2c3e7a', stars: 40, moon: true,  ground: 'hill',   groundColor: '#1a2749', sleepy: true },
+  meadow:  { top: '#1b2a5a', bottom: '#24406a', stars: 30, moon: true,  ground: 'meadow', groundColor: '#2f5f3c' },
+  burrow:  { top: '#1b2a5a', bottom: '#2e2418', stars: 10, moon: false, ground: 'burrow', groundColor: '#4a3524' },
+  sea:     { top: '#16264f', bottom: '#0e3a5a', stars: 35, moon: true,  ground: 'water',  groundColor: '#123048' },
+  storm:   { top: '#0d1430', bottom: '#123048', stars: 0,  moon: false, ground: 'water',  groundColor: '#0e2438', storm: true },
+  harbour: { top: '#1b2a5a', bottom: '#2c3e7a', stars: 30, moon: true,  ground: 'water',  groundColor: '#123048', harbourLights: true },
+};
+
 export class Storybook extends THREE.Group {
   constructor(story) {
     super();
@@ -198,73 +212,240 @@ export class Storybook extends THREE.Group {
     }
   }
 
+  // Effects are named per story ("hero-wiggle", "hero-hop", "hero-rock"); the older
+  // dragon-specific names still work so nothing that shipped earlier breaks.
+  fx(...names) {
+    return names.some((n) => this.effects[n]);
+  }
+
   drawIllustration(c, x, y, w, h) {
     const t = this.time;
-    const scene = this.page.scene;
-    const fx = this.effects;
+    const S = SCENES[this.page.scene] || SCENES.stars;
+    const dim = this.fx('lights-dim') ? 0.5 : 1;
 
     // sky
-    const night = c.createLinearGradient(0, y, 0, y + h);
-    const dim = fx['lights-dim'] ? 0.5 : 1;
-    night.addColorStop(0, scene === 'sleep' ? '#0b1030' : '#1b2a5a');
-    night.addColorStop(1, scene === 'cave' ? '#3b2a1a' : '#2c3e7a');
-    c.fillStyle = night;
+    const sky = c.createLinearGradient(0, y, 0, y + h);
+    sky.addColorStop(0, S.top);
+    sky.addColorStop(1, S.bottom);
+    c.fillStyle = sky;
     this.roundRect(c, x, y, w, h, 24);
     c.fill();
+    c.save();
+    this.roundRect(c, x, y, w, h, 24);
+    c.clip();
     c.globalAlpha = dim;
 
     // stars
-    const n = scene === 'cave' ? 12 : 40;
-    for (let i = 0; i < n; i++) {
+    const twinkling = this.fx('stars-twinkle');
+    for (let i = 0; i < S.stars; i++) {
       const sx = x + ((i * 97) % (w - 40)) + 20;
       const sy = y + ((i * 57) % (h / 2)) + 20;
-      const tw = fx['stars-twinkle'] ? 0.5 + 0.5 * Math.sin(t * 12 + i) : 0.6 + 0.4 * Math.sin(t * 2 + i);
+      const tw = twinkling ? 0.5 + 0.5 * Math.sin(t * 12 + i) : 0.6 + 0.4 * Math.sin(t * 2 + i);
       c.fillStyle = `rgba(255,255,220,${tw})`;
       c.beginPath();
       c.arc(sx, sy, 3 + (i % 3), 0, Math.PI * 2);
       c.fill();
     }
 
-    // moon
-    if (scene === 'moon' || scene === 'sleep' || scene === 'stars') {
-      const mx = x + w * 0.75, my = y + h * 0.22;
-      c.fillStyle = '#fff3b0';
+    if (S.moon) this.drawMoon(c, x + w * 0.75, y + h * 0.22, S);
+    this.drawGround(c, x, y, w, h, S);
+
+    // the story's own character, in the spot the dragon used to sit
+    const flying = this.fx('hero-fly', 'dragon-fly');
+    const wiggle = this.fx('hero-wiggle', 'hero-hop', 'hero-rock', 'dragon-wiggle') ? Math.sin(t * 20) * 8 : 0;
+    const hx = x + w * 0.45 + (flying ? Math.sin(t * 3) * 60 : 0) + wiggle;
+    const hy = y + h * (flying ? 0.35 + 0.1 * Math.sin(t * 4) : 0.72) + Math.sin(t * 2) * 4;
+    const asleep = this.fx('eyes-close') || S.sleepy;
+    const loud = this.fx('roar');
+    const character = this.story.character || 'dragon';
+    if (character === 'rabbit') this.drawRabbit(c, hx, hy, flying, asleep, loud);
+    else if (character === 'boat') this.drawBoat(c, hx, hy, flying, asleep, loud, S);
+    else this.drawDragon(c, hx, hy, flying, asleep, loud);
+
+    c.restore();
+    c.globalAlpha = 1;
+  }
+
+  drawMoon(c, mx, my, S) {
+    c.fillStyle = '#fff3b0';
+    c.beginPath();
+    c.arc(mx, my, 70, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = S.top;
+    c.beginPath();
+    c.arc(mx - 28, my - 12, 58, 0, Math.PI * 2);
+    c.fill();
+    if (this.fx('moon-smile') || S.sleepy) {
+      c.strokeStyle = '#a58a3c';
+      c.lineWidth = 5;
       c.beginPath();
-      c.arc(mx, my, 70, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = scene === 'sleep' ? '#0b1030' : '#1b2a5a';
-      c.beginPath();
-      c.arc(mx - 28, my - 12, 58, 0, Math.PI * 2);
-      c.fill();
-      if (fx['moon-smile'] || scene === 'sleep') {
-        c.strokeStyle = '#a58a3c';
-        c.lineWidth = 5;
+      c.arc(mx + 20, my + 10, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+      c.stroke();
+    }
+  }
+
+  drawGround(c, x, y, w, h, S) {
+    const t = this.time;
+    if (S.ground === 'water') {
+      // rolling sea: three offset sine bands, taller and faster in a storm
+      const tops = [0.66, 0.74, 0.84];
+      const cols = ['#1d4e6e', '#17415e', '#102f47'];
+      if (S.harbourLights) this.drawHarbour(c, x, y, w, h);
+      tops.forEach((frac, band) => {
+        c.fillStyle = cols[band];
         c.beginPath();
-        c.arc(mx + 20, my + 10, 22, 0.15 * Math.PI, 0.85 * Math.PI);
-        c.stroke();
-      }
+        c.moveTo(x, y + h);
+        const amp = (S.storm ? 26 : 10) + band * 4;
+        for (let px = 0; px <= w; px += 12) {
+          const py = y + h * frac + Math.sin(px / 70 + t * (1.4 + band * 0.5)) * amp;
+          c.lineTo(x + px, py);
+        }
+        c.lineTo(x + w, y + h);
+        c.closePath();
+        c.fill();
+      });
+      return;
     }
 
-    // hill / cave
-    c.fillStyle = scene === 'cave' ? '#4a3524' : '#22335f';
+    // hill / meadow / cave / burrow all share one soft mound
+    c.fillStyle = S.groundColor;
     c.beginPath();
     c.ellipse(x + w / 2, y + h + 40, w * 0.7, h * 0.35, 0, Math.PI, 0);
     c.fill();
-    if (scene === 'cave') {
-      c.fillStyle = fx['cave-glow'] ? '#ffb347' : '#1a120b';
+
+    if (S.ground === 'meadow') {
+      c.strokeStyle = '#3f7a4a';
+      c.lineWidth = 3;
+      for (let i = 0; i < 26; i++) {
+        const gx = x + ((i * 83) % (w - 30)) + 15;
+        const gy = y + h * 0.86 + ((i * 29) % 40);
+        const lean = Math.sin(t * 1.5 + i) * 5;
+        c.beginPath();
+        c.moveTo(gx, gy);
+        c.quadraticCurveTo(gx + lean, gy - 18, gx + lean * 2, gy - 30);
+        c.stroke();
+      }
+    }
+    if (S.ground === 'cave' || S.ground === 'burrow') {
+      c.fillStyle = this.fx('cave-glow') ? '#ffb347' : '#1a120b';
       c.beginPath();
-      c.ellipse(x + w * 0.5, y + h * 0.78, 110, 80, 0, Math.PI, 0);
+      c.ellipse(x + w * 0.5, y + h * 0.78, S.ground === 'burrow' ? 80 : 110, 80, 0, Math.PI, 0);
       c.fill();
     }
+  }
 
-    // dragon
-    const fly = fx['dragon-fly'] ? 1 : 0;
-    const wig = fx['dragon-wiggle'] ? Math.sin(t * 20) * 8 : 0;
-    const baseX = x + w * 0.45 + (fly ? Math.sin(t * 3) * 60 : 0);
-    const baseY = y + h * (fly ? 0.35 + 0.1 * Math.sin(t * 4) : 0.72) + Math.sin(t * 2) * 4;
-    this.drawDragon(c, baseX + wig, baseY, fly, fx['eyes-close'] || scene === 'sleep', fx['roar']);
+  drawHarbour(c, x, y, w, h) {
+    // a low shoreline of warm windows — the thing you steer towards
+    const base = y + h * 0.7;
+    for (let i = 0; i < 14; i++) {
+      const bx = x + 20 + i * ((w - 40) / 14);
+      const bh = 26 + ((i * 37) % 44);
+      c.fillStyle = '#101731';
+      c.fillRect(bx, base - bh, 24, bh + 30);
+      c.fillStyle = `rgba(255,213,74,${0.55 + 0.45 * Math.sin(this.time * 2 + i)})`;
+      c.fillRect(bx + 7, base - bh + 8, 10, 10);
+    }
+  }
 
-    c.globalAlpha = 1;
+  drawRabbit(c, x, y, hopping, eyesClosed, thumping) {
+    c.save();
+    c.translate(x, y + (hopping ? -Math.abs(Math.sin(this.time * 6)) * 40 : 0));
+    const fur = '#b98b6a';
+    const inner = '#e8c4ad';
+    // ears
+    const twitch = thumping ? Math.sin(this.time * 22) * 10 : Math.sin(this.time * 1.5) * 3;
+    [-1, 1].forEach((side) => {
+      c.fillStyle = fur;
+      c.beginPath();
+      c.ellipse(side * 16 + twitch * side * 0.4, -74, 11, 38, side * 0.18, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = inner;
+      c.beginPath();
+      c.ellipse(side * 16 + twitch * side * 0.4, -74, 5, 26, side * 0.18, 0, Math.PI * 2);
+      c.fill();
+    });
+    // tail, body, belly, head
+    c.fillStyle = '#f3e6da';
+    c.beginPath(); c.arc(-46, 22, 13, 0, Math.PI * 2); c.fill();
+    c.fillStyle = fur;
+    c.beginPath(); c.ellipse(0, 14, 46, 38, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#e8d5c4';
+    c.beginPath(); c.ellipse(0, 24, 26, 22, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = fur;
+    c.beginPath(); c.arc(0, -30, 30, 0, Math.PI * 2); c.fill();
+    // eyes
+    c.strokeStyle = '#1b1b1b';
+    c.fillStyle = '#1b1b1b';
+    if (eyesClosed) {
+      c.lineWidth = 4;
+      c.beginPath(); c.moveTo(-17, -34); c.lineTo(-6, -34); c.stroke();
+      c.beginPath(); c.moveTo(6, -34); c.lineTo(17, -34); c.stroke();
+    } else {
+      c.beginPath(); c.arc(-11, -34, 4.5, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(11, -34, 4.5, 0, Math.PI * 2); c.fill();
+    }
+    // nose + whiskers
+    c.fillStyle = '#d98b8b';
+    c.beginPath(); c.ellipse(0, -22, 6, 4.5, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(40,30,25,0.6)';
+    c.lineWidth = 2;
+    [-1, 1].forEach((side) => {
+      [-4, 2].forEach((dy) => {
+        c.beginPath();
+        c.moveTo(side * 6, -21 + dy);
+        c.lineTo(side * 34, -26 + dy * 2);
+        c.stroke();
+      });
+    });
+    c.restore();
+  }
+
+  drawBoat(c, x, y, sailing, lampLit, horn, S) {
+    c.save();
+    const roll = Math.sin(this.time * (S.storm ? 3.2 : 1.6)) * (S.storm ? 0.18 : 0.07);
+    c.translate(x, y + Math.sin(this.time * 2.2) * (S.storm ? 14 : 5));
+    c.rotate(roll);
+    // mast + sails
+    c.strokeStyle = '#8d6e4f';
+    c.lineWidth = 6;
+    c.beginPath(); c.moveTo(0, -18); c.lineTo(0, -108); c.stroke();
+    c.fillStyle = '#f4ead6';
+    c.beginPath();
+    c.moveTo(6, -104);
+    c.quadraticCurveTo(78 + (sailing ? 14 : 0), -62, 6, -22);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#e2d3ba';
+    c.beginPath();
+    c.moveTo(-6, -96);
+    c.quadraticCurveTo(-52, -60, -6, -26);
+    c.closePath();
+    c.fill();
+    // hull
+    c.fillStyle = '#2f6fa8';
+    c.beginPath();
+    c.moveTo(-66, -16);
+    c.lineTo(66, -16);
+    c.quadraticCurveTo(46, 28, 0, 30);
+    c.quadraticCurveTo(-46, 28, -66, -16);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#1f4e77';
+    c.fillRect(-66, -16, 132, 8);
+    // bow lamp — steady when the story says so, pulsing otherwise
+    const glow = lampLit || horn ? 1 : 0.45 + 0.25 * Math.sin(this.time * 3);
+    c.fillStyle = `rgba(255,213,74,${glow})`;
+    c.beginPath(); c.arc(52, -26, horn ? 12 : 8, 0, Math.PI * 2); c.fill();
+    if (horn) {
+      c.strokeStyle = 'rgba(255,213,74,0.5)';
+      c.lineWidth = 3;
+      [22, 34, 46].forEach((r, i) => {
+        c.beginPath();
+        c.arc(52, -26, r + Math.sin(this.time * 12 + i) * 4, -0.7, 0.7);
+        c.stroke();
+      });
+    }
+    c.restore();
   }
 
   drawDragon(c, x, y, flying, eyesClosed, roaring) {

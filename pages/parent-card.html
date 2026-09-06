@@ -19,6 +19,7 @@
     .phone { font-size: 24px; font-weight: 700; margin: 0; color: #a0522d; }
     .keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 9px; text-align: center; font-family: system-ui, sans-serif; }
     .keys b { display: block; font-size: 15px; background: #1a1a2e; color: #ffd54a; border-radius: 6px; padding: 2px 0 1px; margin-bottom: 2px; }
+    .story-title { font-size: 10px; font-style: italic; color: #6b5b45; margin: 0; }
     .foot { font-size: 9px; color: #6b5b45; margin: 0; font-family: system-ui, sans-serif; }
     .print { margin-top: 18px; text-align: center; font-family: system-ui, sans-serif; }
     .print button { font: 15px system-ui; padding: 10px 18px; border-radius: 8px; border: 0; background: #1a1a2e; color: #ffd54a; cursor: pointer; }
@@ -30,13 +31,11 @@
   <div class="sheet">
     <div class="card">
       <p class="title">Once Upon a Call · <span id="child">Maya</span>'s storybook</p>
+      <p class="story-title" id="title"></p>
       <p class="phone" id="phone">…</p>
-      <div class="keys">
+      <div class="keys" id="keys">
         <div><b>#</b>next page</div>
         <div><b>*</b>back</div>
-        <div><b>1</b>roar</div>
-        <div><b>2</b>twinkle</div>
-        <div><b>3</b>moon</div>
       </div>
       <p class="foot">Call at bedtime · read slowly · press # when you reach the end of a page · your PIN: ____</p>
     </div>
@@ -49,6 +48,19 @@
     fetch('/api/info').then(r => r.json()).then(i => {
       document.getElementById('phone').textContent = i.phoneFormatted || i.phone || '';
       document.getElementById('child').textContent = i.childName || 'your child';
+      document.getElementById('title').textContent = i.title || '';
+    }).catch(() => {});
+    // The card is printed and handed to the parent, so the keys on it must be the keys of the
+    // story that is actually loaded — not the dragon's, always.
+    fetch('/api/story').then(r => r.json()).then(s => {
+      const keys = document.getElementById('keys');
+      for (const [k, fx] of Object.entries(s.effects || {})) {
+        const d = document.createElement('div');
+        d.innerHTML = '<b></b>';
+        d.querySelector('b').textContent = k;
+        d.appendChild(document.createTextNode(String(fx.label || '').toLowerCase()));
+        keys.appendChild(d);
+      }
     }).catch(() => {});
   </script>
 </body>
