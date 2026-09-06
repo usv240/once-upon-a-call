@@ -235,9 +235,11 @@ export class Storybook extends THREE.Group {
     c.clip();
     c.globalAlpha = dim;
 
-    // stars
+    // stars. A keypad twinkle has to be visible even on a page whose sky is empty, so the
+    // storm briefly breaks and lets some through — otherwise pressing 2 there does nothing.
     const twinkling = this.fx('stars-twinkle');
-    for (let i = 0; i < S.stars; i++) {
+    const starCount = S.stars || (twinkling ? 34 : 0);
+    for (let i = 0; i < starCount; i++) {
       const sx = x + ((i * 97) % (w - 40)) + 20;
       const sy = y + ((i * 57) % (h / 2)) + 20;
       const tw = twinkling ? 0.5 + 0.5 * Math.sin(t * 12 + i) : 0.6 + 0.4 * Math.sin(t * 2 + i);
@@ -247,7 +249,9 @@ export class Storybook extends THREE.Group {
       c.fill();
     }
 
-    if (S.moon) this.drawMoon(c, x + w * 0.75, y + h * 0.22, S);
+    // Likewise the moon: on a cave, a burrow or a storm it is out of frame, so a keypad hum
+    // coaxes it out rather than silently doing nothing.
+    if (S.moon || this.fx('moon-smile')) this.drawMoon(c, x + w * 0.75, y + h * 0.22, S);
     this.drawGround(c, x, y, w, h, S);
 
     // the story's own character, in the spot the dragon used to sit
@@ -281,6 +285,17 @@ export class Storybook extends THREE.Group {
       c.beginPath();
       c.arc(mx + 20, my + 10, 22, 0.15 * Math.PI, 0.85 * Math.PI);
       c.stroke();
+    }
+    // The sleep pages draw a smiling moon already, so the smile alone cannot be the feedback
+    // for pressing 3 there. A humming moon also rings.
+    if (this.fx('moon-smile')) {
+      c.strokeStyle = 'rgba(255,243,176,0.55)';
+      c.lineWidth = 4;
+      for (let i = 0; i < 3; i++) {
+        c.beginPath();
+        c.arc(mx, my, 84 + i * 22 + Math.sin(this.time * 6 + i) * 6, 0, Math.PI * 2);
+        c.stroke();
+      }
     }
   }
 

@@ -325,7 +325,7 @@ export class VonageAudioCall extends xb.Script {
     const fx = this.story?.effects?.[key];
     if (!fx || !this.book) return;
     const map = { roar: 'roar', twinkle: 'stars-twinkle', hum: 'moon-smile' };
-    this.book.trigger(map[fx.sound] || 'dragon-wiggle', 2.5);
+    this.book.trigger(map[fx.sound] || 'hero-wiggle', 2.5);
     this._beep(fx.sound);
     this.book.setBanner(`${this.story.parentName || 'Parent'} pressed ${key}: ${fx.label}`);
   }

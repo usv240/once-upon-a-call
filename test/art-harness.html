@@ -33,5 +33,36 @@
     }
     return { id, character: story.character, title: story.title, pages: out };
   };
+
+  // Does pressing 1 / 2 / 3 actually change the picture on this page? Renders the page clean,
+  // then with one keypad effect held, and reports how many sampled pixels differ.
+  window.__effectDiff = async (id) => {
+    const story = await (await fetch('/api/story?id=' + id)).json();
+    const book = new Storybook(story);
+    const MAP = { roar: 'roar', twinkle: 'stars-twinkle', hum: 'moon-smile' };
+    const snap = () => {
+      const c = book.canvas.getContext('2d');
+      return c.getImageData(0, 0, book.canvas.width, book.canvas.height).data;
+    };
+    const diff = (a, b) => {
+      let n = 0;
+      for (let i = 0; i < a.length; i += 4 * 53) if (Math.abs(a[i] - b[i]) > 8) n++;
+      return n;
+    };
+    const out = [];
+    for (let i = 0; i < story.pages.length; i++) {
+      for (const [key, fx] of Object.entries(story.effects || {})) {
+        book.setPage(i);
+        book.time = 3.0;             // fixed clock so idle animation cannot masquerade as a change
+        book.draw();
+        const before = snap();
+        book.trigger(MAP[fx.sound] || 'hero-wiggle', 5);
+        book.time = 3.0;
+        book.draw();
+        out.push({ page: i + 1, scene: story.pages[i].scene, key, label: fx.label, changed: diff(before, snap()) });
+      }
+    }
+    return { id, results: out };
+  };
   window.__ready = true;
 </script>

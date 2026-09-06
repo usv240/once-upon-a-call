@@ -356,20 +356,24 @@ app.all('/voice/event', async (req, res) => {
 app.post('/voice/dtmf', (req, res) => {
   res.sendStatus(200);
   const b = req.body || {};
-  const digit = String(b.dtmf?.digits ?? b.digits ?? b.digit ?? '').trim();
-  if (!digit) return console.log('DTMF webhook with no digit:', JSON.stringify(b));
-  console.log('KEYPAD:', digit);
+  const pressed = String(b.dtmf?.digits ?? b.digits ?? b.digit ?? '').trim();
+  if (!pressed) return console.log('DTMF webhook with no digit:', JSON.stringify(b));
+  console.log('KEYPAD:', pressed);
 
+  // Pressed quickly, several digits can arrive in one webhook. Replaying them in order means
+  // a fast "##" turns two pages instead of matching nothing and being dropped.
   const pageCount = activeStory().pages.length;
-  if (digit === '#') session.page = Math.min(session.page + 1, pageCount - 1);
-  else if (digit === '*') session.page = Math.max(session.page - 1, 0);
+  for (const digit of pressed.split('')) {
+    if (digit === '#') session.page = Math.min(session.page + 1, pageCount - 1);
+    else if (digit === '*') session.page = Math.max(session.page - 1, 0);
 
-  if (digit === '#' || digit === '*') mark('page', { page: session.page });
-  else {
-    mark('keypad', { digit });
-    io.emit('effect', { key: digit });
+    if (digit === '#' || digit === '*') mark('page', { page: session.page });
+    else {
+      mark('keypad', { digit });
+      io.emit('effect', { key: digit });
+    }
+    io.emit('keypad', { digit });
   }
-  io.emit('keypad', { digit });
   broadcastState();
 });
 

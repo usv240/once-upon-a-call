@@ -176,6 +176,12 @@ the canvas. The illustrations are procedural, so a typo in `drawRabbit` does not
 anything — it just draws nothing, and nobody notices until a judge is watching the video.
 This check caught exactly that: a refactor silently removed `drawDragon`.
 
+**`test/effects.test.js`** presses 1, 2 and 3 on every page of every story and fails if the
+picture does not actually change. Whether a keypad effect is visible depends on the scene —
+"stars twinkle" needs stars, "moon hum" needs a moon — so on a cave or a storm the banner
+appeared and the beep played while nothing moved. It found six such dead keypresses; the art
+now brings the moon out and breaks the storm rather than ignoring the press.
+
 **`test/pages.test.js`** smoke-tests the caregiver and printable parent-card pages for console
 errors and missing content.
 
