@@ -586,11 +586,22 @@ export class VonageAudioCall extends xb.Script {
     if (this.preview || this.replay || this.callId) return;
     this._createBook();
     if (!this.book || !this.story) return this._setStatus('Story not loaded yet.');
-    this.preview = { timers: [], cancelled: false };
+    this.preview = { timers: [], cancelled: false, spoke: false, voice: null };
     this._setStatus('Preview — no call needed');
     this.updateControlRow('PREVIEW');
     window.dispatchEvent(new Event('ouac:preview-start'));
-    this._previewFrom(0);
+    this.book.setBanner('Preview — starting…');
+    this._voicesReady().then((voices) => {
+      const run = this.preview;
+      if (!run || run.cancelled) return;
+      run.voice =
+        voices.find((v) => /^en[-_]US/i.test(v.lang) && v.localService) ||
+        voices.find((v) => /^en[-_]US/i.test(v.lang)) ||
+        voices.find((v) => /^en/i.test(v.lang)) ||
+        null;
+      console.log(`Preview narration voice: ${run.voice ? run.voice.name : '(browser default)'} — ${voices.length} available`);
+      this._previewFrom(0);
+    });
   }
 
   _previewFrom(i) {
@@ -612,6 +623,27 @@ export class VonageAudioCall extends xb.Script {
 
   // Speaks one page and highlights along with it. Falls back to timed pacing where speech
   // synthesis is missing or silent, so the tour always completes.
+  // Chrome populates getVoices() asynchronously. Called too early, speak() silently does
+  // nothing at all — no onstart, no onerror, no onend — and the tour runs mute while looking
+  // fine. Wait for the list, but never hang on it.
+  _voicesReady() {
+    const synth = window.speechSynthesis;
+    if (!synth) return Promise.resolve([]);
+    const have = () => synth.getVoices() || [];
+    if (have().length) return Promise.resolve(have());
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        synth.removeEventListener?.('voiceschanged', done);
+        resolve(have());
+      };
+      synth.addEventListener?.('voiceschanged', done);
+      setTimeout(done, 2000);
+    });
+  }
+
   _narratePage(i, done) {
     const run = this.preview;
     const page = this.story.pages[i];
@@ -635,32 +667,67 @@ export class VonageAudioCall extends xb.Script {
         }
       }
     };
+    // Highlight on a timer instead of on the voice. Used when there is no speech engine, and
+    // as the rescue path when speak() turns out to be a no-op.
+    const paceSilently = () => {
+      if (finished) return;
+      words.forEach((_, n) => run.timers.push(setTimeout(() => showUpTo(n + 1), (n + 1) * 380)));
+      run.timers.push(setTimeout(finish, words.length * 380 + 700));
+    };
 
     const synth = window.speechSynthesis;
-    if (synth && typeof SpeechSynthesisUtterance !== 'undefined') {
-      try {
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.85;
-        u.pitch = 1.05;
-        // charIndex -> word index, so the glow tracks the narration exactly
-        u.onboundary = (e) => {
-          if (e.name && e.name !== 'word') return;
-          showUpTo(wordIndexAtChar(text, e.charIndex)); // unit-tested in test/preview.test.js
-        };
-        u.onend = () => { showUpTo(words.length); finish(); };
-        u.onerror = () => { showUpTo(words.length); finish(); };
-        synth.cancel();
-        synth.speak(u);
-        run.utterance = u;
-        // Chrome silently drops long utterances and never fires onend; keep the tour moving.
-        run.timers.push(setTimeout(() => { showUpTo(words.length); finish(); }, 1200 + words.length * 620));
-        return;
-      } catch (e) {
-        /* fall through to timed pacing */
-      }
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+      this.book?.setBanner('Preview (this browser has no speech engine — reading along silently)');
+      return paceSilently();
     }
-    words.forEach((_, n) => run.timers.push(setTimeout(() => showUpTo(n + 1), (n + 1) * 380)));
-    run.timers.push(setTimeout(finish, words.length * 380 + 700));
+
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.85;
+      u.pitch = 1.05;
+      u.volume = 1;
+      if (run.voice) u.voice = run.voice;
+      u.onboundary = (e) => {
+        if (e.name && e.name !== 'word') return;
+        run.spoke = true;
+        showUpTo(wordIndexAtChar(text, e.charIndex)); // unit-tested in test/preview.test.js
+      };
+      u.onstart = () => { run.spoke = true; };
+      u.onend = () => { showUpTo(words.length); finish(); };
+      u.onerror = (e) => {
+        console.warn('Preview narration error:', e?.error || e);
+        if (run.spoke) { showUpTo(words.length); finish(); } else paceSilently();
+      };
+      synth.cancel();
+      synth.speak(u);
+      run.utterance = u;
+
+      // Did it actually start? If nothing has spoken after a moment, speak() was a no-op and
+      // waiting for onend would leave the tour silent and stuck.
+      run.timers.push(
+        setTimeout(() => {
+          if (finished || !this.preview || this.preview.cancelled) return;
+          if (!run.spoke && !synth.speaking) {
+            console.warn('Preview: speech synthesis produced no audio; pacing the highlight instead.');
+            this.book?.setBanner('Preview (no speech voice available — reading along silently)');
+            try { synth.cancel(); } catch (e) { /* ignore */ }
+            paceSilently();
+          }
+        }, 1500)
+      );
+
+      // Chrome also drops long utterances mid-flight and never fires onend. Cap generously.
+      run.timers.push(
+        setTimeout(() => {
+          if (finished) return;
+          showUpTo(words.length);
+          finish();
+        }, 4000 + words.length * 700)
+      );
+    } catch (e) {
+      console.warn('Preview narration unavailable:', e);
+      paceSilently();
+    }
   }
 
   _stopPreview() {
