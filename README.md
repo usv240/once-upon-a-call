@@ -215,6 +215,12 @@ errors and missing content.
 `test/serve-fixture.js` exists so the browser tests run on a laptop with no `.env` — `index.js`
 correctly refuses to boot without real Vonage credentials.
 
+## Testing it by hand
+
+[`TESTING.md`](TESTING.md) walks the whole thing end to end — what to click, what the terminal
+should print at each step, what the phone should say, and what each failure means. The expected
+output in it is taken from the code rather than from memory.
+
 ## Safety & privacy
 - Only approved numbers (or callers with the family PIN) can enter the child's room.
 - Recordings stay on the family's server; they are never sent to third parties. The optional ASR key is only used on the child's device for the parent's audio.

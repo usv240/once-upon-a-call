@@ -543,6 +543,9 @@ export class VonageAudioCall extends xb.Script {
       this.token = (await response.json()).token;
       const sessionId = await this.client.createSession(this.token);
       console.log('Session created successfully. Session ID:', sessionId);
+      // Tell the server there is a storybook open to ring. Without this a closed tab still
+      // looks answerable and the caller waits out a ring timeout for nothing.
+      this.socket?.emit('storybook:ready', { user: name });
       this._setStatus('Waiting for a story call…');
     } catch (error) {
       console.error('Connection failed:', error);

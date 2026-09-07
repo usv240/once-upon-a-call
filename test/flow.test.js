@@ -220,7 +220,31 @@ const post = (p, body) =>
     });
 
     // ---- 6. the attended path still connects ----
+    // A token alone is no longer enough: the server rings only a storybook that is actually
+    // open, which the client announces over its socket.
     await get('/token?name=XR_User_1').catch(() => {});
+    const beforeSocket = await get(`/voice/answer?from=${CALLER}&uuid=leg-1b`);
+    const beforeChoice = await post('/voice/story-choice', { dtmf: { digits: '1' }, from: CALLER });
+    await check('a token without an open storybook still reads to the empty room', () => {
+      const actions = (Array.isArray(beforeChoice) ? beforeChoice : []).map((a) => a.action);
+      assert(!actions.includes('connect'), 'rings a storybook that nobody has open');
+    });
+    void beforeSocket;
+
+    const { io: ioClient } = require('socket.io-client');
+    const sock = ioClient(BASE, { transports: ['websocket'] });
+    await new Promise((resolve, reject) => {
+      sock.on('connect', resolve);
+      sock.on('connect_error', reject);
+      setTimeout(() => reject(new Error('socket never connected')), 10000);
+    });
+    sock.emit('storybook:ready', { user: 'xr_user_1' });
+    await new Promise((r) => setTimeout(r, 400));
+
+    await check('an open storybook shows as online in the health check', async () => {
+      assert((await get('/api/health')).checks.childAppOnline === true, 'storybook not seen as open');
+    });
+
     const attended = await get(`/voice/answer?from=${CALLER}&uuid=leg-2`);
     const attendedNcco = Array.isArray(attended) ? attended : [];
     const afterChoice = await post('/voice/story-choice', { dtmf: { digits: '1' }, from: CALLER });
@@ -232,6 +256,12 @@ const post = (p, body) =>
       assert(connect.timeout > 0, 'connect has no ring timeout, so it can hang forever');
       const tail = actions.slice(actions.indexOf('connect') + 1);
       assert(tail.includes('conversation'), 'no fallback if the child never picks up');
+    });
+
+    sock.close();
+    await new Promise((r) => setTimeout(r, 500));
+    await check('closing the storybook takes it offline again', async () => {
+      assert((await get('/api/health')).checks.childAppOnline === false, 'closed storybook still looks open');
     });
 
     await check('the server survived Vonage calls failing against fake credentials', () => {

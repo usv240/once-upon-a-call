@@ -123,10 +123,21 @@ const session = {
   conversationUuid: null,
   page: 0,
   unattended: false, // reading to an empty room: nobody answered, record it for the morning
+  storybooks: new Set(), // socket ids of open storybooks — see childOnline()
   dtmfSubscribed: false,
   timeline: [], // { t, type, data } during the live story (server-side events)
   recordings: [], // { file, url, uuid, start, end, size, events }
 };
+
+// Is there actually a storybook open to ring?
+//
+// A token having been issued once is not the question — session.userLoggedIn stays set for the
+// life of the process, so a closed tab would still look online and the caller would sit through
+// a ring timeout for a phone that cannot be answered. What matters is whether a storybook is
+// open right now, which the client tells us over its own socket.
+function childOnline() {
+  return !!session.userLoggedIn && session.storybooks.size > 0;
+}
 
 // The active story, already personalised. Everything downstream reads this.
 function activeStory() {
@@ -258,8 +269,8 @@ function unattendedTail(story) {
 function storyNCCO(from) {
   const story = activeStory();
 
-  // Nobody has even opened the storybook: go straight to reading for the morning.
-  if (!session.userLoggedIn) {
+  // No storybook open: go straight to reading for the morning rather than ringing nothing.
+  if (!childOnline()) {
     session.unattended = true;
     return [
       { action: 'record', eventUrl: [`${BASE_URL}/voice/recording`], format: 'mp3' },
@@ -566,7 +577,7 @@ app.get('/api/health', (req, res) => {
     vonageApp: !!appId && !!privateKey,
     phoneNumber: !!vonageNumber,
     publicUrl: !BASE_URL.includes('localhost'),
-    childAppOnline: !!session.userLoggedIn,
+    childAppOnline: childOnline(),
     captions: !!process.env.DEEPGRAM_API_KEY,
     callerAllowList: APPROVED_NUMBERS.length > 0,
     familyPin: !!FAMILY_PIN,
@@ -608,6 +619,21 @@ app.get('/api/recordings', (req, res) =>
 
 io.on('connection', (socket) => {
   socket.emit('state', publicState());
+
+  // Only the storybook itself announces; the caregiver page and the printable card also hold
+  // sockets and must not make a closed storybook look open.
+  socket.on('storybook:ready', () => {
+    session.storybooks.add(socket.id);
+    console.log(`Storybook open (${session.storybooks.size} on this server)`);
+    broadcastState();
+  });
+
+  socket.on('disconnect', () => {
+    if (session.storybooks.delete(socket.id)) {
+      console.log(`Storybook closed (${session.storybooks.size} left)`);
+      broadcastState();
+    }
+  });
 });
 
 server.listen(port, () => console.log(`Once Upon a Call listening on ${port}`));

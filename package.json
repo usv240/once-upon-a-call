@@ -23,7 +23,8 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
-    "puppeteer-core": "^25.10.0"
+    "puppeteer-core": "^25.10.0",
+    "socket.io-client": "^4.8.3"
   },
   "version": "1.0.0",
   "description": "A live AR bedtime story, read over any phone. Built with the Vonage Voice API and XR Blocks.",
