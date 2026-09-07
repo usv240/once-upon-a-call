@@ -220,22 +220,33 @@ app.get('/token', async (req, res) => {
 // Offered before the story starts, and only when there is more than one book on the shelf.
 // The parent has no screen, so the shelf is read to them and chosen with the same keypad that
 // will turn the pages a moment later.
-function menuNCCO() {
+// Vonage caps an input action's dtmf timeOut at 10 seconds, and on most phones the caller has
+// to find and open the in-call dialpad before they can press anything at all — which eats most
+// of that on its own. So rather than stretching one window, the menu asks twice.
+const MENU_TIMEOUT = 10;
+const MENU_RETRIES = 1;
+
+function menuNCCO(attempt = 0) {
   const choices = STORIES.slice(0, 9)
     .map((s, i) => `Press ${i + 1} for ${s.menuLabel || s.title}.`)
     .join(' ');
+  const fallback = STORIES[0].menuLabel || STORIES[0].title;
+  // bargeIn lets them press during the prompt, so someone who already knows the menu never
+  // waits through it.
   return [
     {
       action: 'talk',
       language: 'en-US',
       bargeIn: true,
-      text: `Welcome to Once Upon a Call. Tonight you can read ${CHILD_NAME} one of ${STORIES.length} stories. ${choices}`,
+      text: attempt
+        ? `Let's try that again. ${choices} Or stay on the line for ${fallback}.`
+        : `Welcome to Once Upon a Call. Choose tonight's story for ${CHILD_NAME}. ${choices} Take your time; press a number when you are ready.`,
     },
     {
       action: 'input',
       type: ['dtmf'],
-      dtmf: { maxDigits: 1, timeOut: 8 },
-      eventUrl: [`${BASE_URL}/voice/story-choice`],
+      dtmf: { maxDigits: 1, timeOut: MENU_TIMEOUT },
+      eventUrl: [`${BASE_URL}/voice/story-choice?attempt=${attempt}`],
     },
   ];
 }
@@ -361,8 +372,20 @@ app.post('/voice/pin', (req, res) => {
 app.post('/voice/story-choice', (req, res) => {
   const digit = String(req.body?.dtmf?.digits || '').trim();
   const picked = STORIES[Number(digit) - 1];
-  if (picked) setStory(picked.id || 'default', `chosen on the keypad: ${digit}`);
-  else console.log(`Story menu: no usable choice (${digit || 'timeout'}), keeping ${session.storyId}`);
+  if (picked) {
+    setStory(picked.id || 'default', `chosen on the keypad: ${digit}`);
+    return res.json(storyNCCO(req.body?.from));
+  }
+
+  // Nothing pressed, or a digit with no story behind it. Defaulting on the first miss is a
+  // poor way to treat someone who may be holding a handset in a noisy room, hunting for the
+  // dialpad, on a call they waited a week for. Ask once more before choosing for them.
+  const attempt = Number(req.query.attempt || 0);
+  if (attempt < MENU_RETRIES) {
+    console.log(`Story menu: ${digit ? `no story on key ${digit}` : 'nothing pressed'}, asking again`);
+    return res.json(menuNCCO(attempt + 1));
+  }
+  console.log(`Story menu: no choice after ${attempt + 1} attempts, keeping ${session.storyId}`);
   res.json(storyNCCO(req.body?.from));
 });
 

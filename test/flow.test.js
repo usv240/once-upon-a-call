@@ -106,11 +106,41 @@ const post = (p, body) =>
       assert(menu[0].action === 'talk', `first action is ${menu[0].action}`);
       assert(/Press 1 for/.test(menu[0].text), 'menu does not read the choices aloud');
       assert(menu[1].action === 'input', `second action is ${menu[1].action}`);
-      assert(menu[1].eventUrl[0].endsWith('/voice/story-choice'), 'menu input posts to the wrong place');
+      assert(menu[1].eventUrl[0].includes('/voice/story-choice'), 'menu input posts to the wrong place');
+      assert(menu[1].dtmf.timeOut === 10, `menu only allows ${menu[1].dtmf.timeOut}s to press a key`);
+      assert(/Take your time/i.test(menu[0].text), 'the prompt never reassures them they can take a moment');
+    });
+
+    // ---- 1b. a caller who presses nothing gets asked again, not overruled ----
+    const silent1 = await post('/voice/story-choice?attempt=0', { from: CALLER, uuid: LEG });
+    await check('pressing nothing re-offers the menu instead of choosing for you', () => {
+      const actions = (Array.isArray(silent1) ? silent1 : []).map((a) => a.action);
+      assert(actions.includes('input'), `menu was not repeated: ${actions.join(', ')}`);
+      const talk = silent1.find((a) => a.action === 'talk');
+      assert(/try that again/i.test(talk.text), `unexpected retry prompt: ${talk.text}`);
+      assert(/stay on the line/i.test(talk.text), 'never says what happens if they keep waiting');
+      assert(silent1.find((a) => a.action === 'input').dtmf.timeOut === 10, 'retry does not use the full 10s');
+    });
+
+    const outOfRange = await post('/voice/story-choice?attempt=0', { dtmf: { digits: '7' }, from: CALLER });
+    await check('a digit with no story behind it also gets a second chance', () => {
+      const actions = (Array.isArray(outOfRange) ? outOfRange : []).map((a) => a.action);
+      assert(actions.includes('input'), 'pressing 7 fell straight through to a story');
+    });
+
+    const silent2 = await post('/voice/story-choice?attempt=1', { from: CALLER, uuid: LEG });
+    await check('after the second miss it proceeds rather than looping forever', () => {
+      const actions = (Array.isArray(silent2) ? silent2 : []).map((a) => a.action);
+      assert(!actions.includes('input'), 'the menu loops instead of getting on with the story');
+      assert(actions.includes('record'), `did not proceed to a story: ${actions.join(', ')}`);
+    });
+
+    await check('the default after two misses is the first book on the shelf', async () => {
+      assert((await get('/api/story')).id === 'dragon', 'silence changed the story');
     });
 
     // ---- 2. nobody is at the storybook: read it for the morning ----
-    const unattended = await post('/voice/story-choice', { dtmf: { digits: '3' }, from: CALLER, uuid: LEG });
+    const unattended = await post('/voice/story-choice?attempt=0', { dtmf: { digits: '3' }, from: CALLER, uuid: LEG });
     await check('choosing 3 selects the third story on the shelf', async () => {
       assert(Array.isArray(unattended), 'story-choice did not return an NCCO');
     });

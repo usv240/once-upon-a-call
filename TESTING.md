@@ -117,13 +117,29 @@ and the terminal shows `Storybook open (1 on this server)`.
 
 **Expect to hear:**
 
-> *"Welcome to Once Upon a Call. Tonight you can read Maya one of 3 stories. Press 1 for the
-> little dragon who couldn't sleep. Press 2 for the rabbit who waited for the moon. Press 3 for
-> the little boat that sailed home."*
+> *"Welcome to Once Upon a Call. Choose tonight's story for Maya. Press 1 for the little dragon
+> who couldn't sleep. Press 2 for the rabbit who waited for the moon. Press 3 for the little boat
+> that sailed home. Take your time; press a number when you are ready."*
 
 **Terminal:** `NCCO request: { ... from: '<your number>' ... }`
 
 **Press 2** (Android: tap **Keypad** in the call screen first).
+
+You can press **during** the prompt — it barges in, so you never have to sit through the whole
+menu once you know it.
+
+**If you press nothing**, you get 10 seconds and then it asks a second time rather than choosing
+for you:
+
+> *"Let's try that again. Press 1 for… Press 2 for… Press 3 for… Or stay on the line for the
+> little dragon who couldn't sleep."*
+
+Terminal: `Story menu: nothing pressed, asking again`. Pressing a digit with no story behind it
+(say `7`) gets the same second chance. Only after two misses does it proceed with the dragon:
+`Story menu: no choice after 2 attempts, keeping dragon`.
+
+**Worth testing deliberately:** let it time out twice and confirm you end up in the dragon story
+rather than the call dropping.
 
 **Expect:**
 
@@ -340,6 +356,7 @@ npm run test:browser      # needs Chrome installed
 | No audio from the call | AudioContext suspended by autoplay policy | Click anywhere on the page, or reload with `?gain=1` |
 | Voice too quiet | Default boost too low for your setup | Reload with `?gain=4` |
 | Scene looks tiny on a big monitor | 3D size is angular, not pixel-based | Reload with `?dist=0.9` |
+| Menu chose for you before you could press | You need the in-call dialpad open first | Tap **Keypad** as soon as the call connects; you now get two 10s windows |
 | Old button labels / stale behaviour | Cached JavaScript | **Ctrl+Shift+R**. This is the single most common cause of "it's broken" |
 | `Cannot find module ...` | Dependencies changed | `npm install` |
 | Unattended path won't trigger | A storybook tab is still open somewhere | Close all tabs; terminal must say `Storybook closed (0 left)` |

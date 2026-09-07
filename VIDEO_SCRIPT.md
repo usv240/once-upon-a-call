@@ -22,7 +22,8 @@ even if the network, the Codespace or the phone lets you down. Never film a brok
 
 **0:45 – 1:10 — The call**
 Screen: app open, "Waiting for a story call…". Phone in frame: dial the Vonage number.
-Phone audio (let it play): *"Welcome to Once Upon a Call. Tonight you can read Maya one of 3 stories. Press 1 for the little dragon who couldn't sleep…"*
+Phone audio (let it play): *"Welcome to Once Upon a Call. Choose tonight's story for Maya. Press 1 for the little dragon who couldn't sleep…"*
+Have the in-call dialpad already open before you dial, so the press is clean on camera.
 **Press 2 on the keypad** — pick the rabbit, then let it turn: the shelf on screen switches to
 The Rabbit Who Waited for the Moon before a word is read.
 > "The parent chooses tonight's book from a keypad menu. They never see a screen."
