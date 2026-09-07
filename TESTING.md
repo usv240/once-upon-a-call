@@ -26,12 +26,41 @@ Approved callers: (open demo mode)
 Family PIN: not set
 Story library: dragon, rabbit, boat
 Once Upon a Call listening on 3000
+Public URL reachable (https://<your-codespace>-3000.app.github.dev) - Vonage can call in.
 ```
 
 - `Story library:` **must** read `dragon, rabbit, boat` in that order. Any other order means the
   `order` field in a story file is wrong and the keypad menu will read them out wrong.
-- If port 3000 is not **Public** in the Ports tab, Vonage cannot reach your webhooks and nothing
-  else in this document will work.
+
+### If the last line is a warning instead
+
+```
+!! https://<your-codespace>-3000.app.github.dev is NOT publicly reachable (HTTP 404).
+```
+
+Port 3000 is forwarded **Private**, so GitHub's proxy answers the browser with its own 404 page
+and answers Vonage with nothing at all. Nothing else in this document will work. Fix it in the
+Codespace terminal:
+
+```bash
+gh codespace ports visibility 3000:public -c $CODESPACE_NAME
+```
+
+If that reports the port is not forwarded, forward it first:
+
+```bash
+gh codespace ports forward 3000:3000 -c $CODESPACE_NAME
+```
+
+Or do the same in the **Ports** tab: find `3000` (use **Forward a Port** if it is missing),
+right-click, **Port Visibility -> Public**. Confirm with:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}
+' https://$CODESPACE_NAME-3000.app.github.dev/api/health
+```
+
+`200` means Vonage can reach you. Anything else, it still cannot.
 
 Then check the box is demo-ready:
 

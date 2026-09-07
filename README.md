@@ -117,7 +117,7 @@ cp .env.example .env      # fill in Vonage app id, private key (base64), number
 npm start                 # http://localhost:3000
 ```
 
-Vonage must be able to reach your server. On GitHub Codespaces the public URL is derived automatically (make port 3000 **Public**). Locally, run `ngrok http 3000` and set `PUBLIC_URL`. Point your Vonage application's **answer** webhook to `<PUBLIC_URL>/voice/answer` (GET) and **event** webhook to `<PUBLIC_URL>/voice/event` (POST) — the included `setup-project.js` does this for Codespaces.
+Vonage must be able to reach your server. On GitHub Codespaces the public URL is derived automatically, but the port is forwarded **Private** by default — which answers Vonage with nothing and your browser with a 404. Run `gh codespace ports visibility 3000:public -c $CODESPACE_NAME`. The server checks this for you at boot and prints the command if it is still closed. Locally, run `ngrok http 3000` and set `PUBLIC_URL`. Point your Vonage application's **answer** webhook to `<PUBLIC_URL>/voice/answer` (GET) and **event** webhook to `<PUBLIC_URL>/voice/event` (POST) — the included `setup-project.js` does this for Codespaces.
 
 Optional `.env`:
 ```

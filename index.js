@@ -717,4 +717,40 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(port, () => console.log(`Once Upon a Call listening on ${port}`));
+// A Codespaces port that is forwarded but Private answers the browser with GitHub's own 404 and
+// answers Vonage with nothing at all - the webhooks just never arrive, the phone rings into
+// silence, and there is no error anywhere to explain it. Cheap to check, so check it at boot and
+// say exactly how to fix it rather than letting it surface mid-demo.
+async function checkPubliclyReachable() {
+  if (!/^https:/.test(BASE_URL)) return; // localhost: nothing to prove
+  let code = 0;
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch(`${BASE_URL}/api/health`, { signal: ctl.signal, redirect: 'manual' });
+    clearTimeout(t);
+    code = r.status;
+  } catch (e) {
+    console.warn(`Could not reach ${BASE_URL} from here (${e.message}).`);
+  }
+  if (code === 200) {
+    console.log(`Public URL reachable (${BASE_URL}) - Vonage can call in.`);
+    return;
+  }
+  console.warn('');
+  console.warn(`!! ${BASE_URL} is NOT publicly reachable${code ? ` (HTTP ${code})` : ''}.`);
+  console.warn('   Vonage webhooks will never arrive and the browser will show a 404.');
+  if (process.env.CODESPACE_NAME) {
+    console.warn('   Fix it with:');
+    console.warn(`     gh codespace ports visibility ${port}:public -c $CODESPACE_NAME`);
+    console.warn(`   or Ports tab -> ${port} -> right-click -> Port Visibility -> Public.`);
+  } else {
+    console.warn('   Check PUBLIC_URL and that your tunnel is running.');
+  }
+  console.warn('');
+}
+
+server.listen(port, () => {
+  console.log(`Once Upon a Call listening on ${port}`);
+  checkPubliclyReachable();
+});
