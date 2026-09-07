@@ -61,6 +61,10 @@ JavaScript otherwise, which has wasted more time on this project than any real b
 story** button, three story cards with the dragon highlighted, and the keypad legend reading
 `# Next page · * Back a page · 1 Dragon roar · 2 Twinkle · 3 Moon hum`.
 
+The guide is longer than a laptop screen: **scroll down inside it** and you should reach a
+**Show the storybook →** button that collapses it to a thin top bar. The 3D scene stays clickable
+once collapsed. (If the wheel does nothing over the guide, you are on stale JavaScript.)
+
 **Expect the status pill** to say `Ready — waiting for a story call` with a blue dot. If it says
 `Server disconnected` in red, the server isn't running or the port isn't public.
 
@@ -96,7 +100,9 @@ Click **The Rabbit Who Waited for the Moon**.
 **Expect:** it becomes the highlighted card, and **the keypad legend changes** to
 `1 Rabbit thump · 2 Twinkle · 3 Moon hum`. Click the boat and it becomes `1 Foghorn · 3 Sea hum`.
 
-If the legend does not change, it is reading stale JavaScript — hard-refresh.
+The line under the shelf should also read **Tonight: The Rabbit Who Waited for the Moon.**
+
+If neither changes, it is reading stale JavaScript — hard-refresh.
 
 Click **▶ Watch the story** again and confirm you get *the rabbit*, not the dragon. Set it back
 to **the dragon** before the call test so the rest of this matches.
@@ -357,6 +363,7 @@ npm run test:browser      # needs Chrome installed
 | Voice too quiet | Default boost too low for your setup | Reload with `?gain=4` |
 | Scene looks tiny on a big monitor | 3D size is angular, not pixel-based | Reload with `?dist=0.9` |
 | Menu chose for you before you could press | You need the in-call dialpad open first | Tap **Keypad** as soon as the call connects; you now get two 10s windows |
+| Can't scroll the guide / no way to close it | Stale CSS from before the pointer-events fix | Hard-refresh; the guide now scrolls and ends with **Show the storybook →** |
 | Old button labels / stale behaviour | Cached JavaScript | **Ctrl+Shift+R**. This is the single most common cause of "it's broken" |
 | `Cannot find module ...` | Dependencies changed | `npm install` |
 | Unattended path won't trigger | A storybook tab is still open somewhere | Close all tabs; terminal must say `Storybook closed (0 left)` |

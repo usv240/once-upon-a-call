@@ -56,6 +56,7 @@
   // Slim top bar once the scene is live (simulator starts immediately on laptops)
   const toggle = $('toggle-landing');
   function setCompact(on) {
+    if (on) landing.scrollTop = 0; // otherwise the thin bar inherits the guide's scroll offset
     landing.classList.toggle('compact', on);
     toggle.textContent = on ? '▾ Guide' : '▴ Close';
     toggle.setAttribute('aria-expanded', String(!on));
@@ -93,6 +94,12 @@
   let shelfBusy = false;
 
   function renderShelf(data) {
+    const chosen = data.stories.find((st) => st.id === data.active);
+    const hint = $('story-hint');
+    if (hint && chosen) {
+      // Say plainly what is loaded. Highlighting a card is easy to miss on a busy screen.
+      hint.innerHTML = `Tonight: <b>${chosen.title}</b>. The parent can also choose from their keypad when the call connects.`;
+    }
     shelf.innerHTML = '';
     for (const st of data.stories) {
       const b = document.createElement('button');
@@ -164,6 +171,14 @@
 
   // "Watch the story" — the tour for anyone who has no second phone to call from.
   // The scene lives underneath this overlay, so get the overlay out of the way first.
+  // Reading the guide cancels the auto-collapse, so there must always be a visible way out of
+  // it — the toggle at the top is off-screen once the page has been scrolled.
+  $('done-btn').addEventListener('click', () => {
+    setCompact(true);
+    window.scrollTo({ top: 0 });
+    landing.scrollTop = 0;
+  });
+
   preview.addEventListener('click', () => {
     setCompact(true);
     window.dispatchEvent(new Event('ouac:preview'));

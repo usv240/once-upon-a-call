@@ -40,6 +40,11 @@
 #landing > * { width: min(100%, 48rem); margin-inline: auto; }
 #landing.compact > * { width: 100%; }
 #landing.hidden { display: none; }
+/* Expanded, the guide draws its own scrim over the whole viewport and is a real page: it has to
+   accept the wheel, or scrolling falls through to the 3D canvas underneath and the guide cannot
+   be scrolled at all — which strands anything below the fold, including the control that closes
+   it. Compact, it is a thin strip and everything around it must stay clickable. */
+#landing:not(.compact) { pointer-events: auto; }
 #landing a, #landing label, #landing input, #landing button { pointer-events: auto; }
 
 /* ---------- expanded guide ---------- */
@@ -139,6 +144,12 @@ kbd {
 .links { display: flex; flex-wrap: wrap; gap: 0.6em 1.4em; justify-content: center; align-items: center; font-family: system-ui, sans-serif; font-size: var(--fs-sm); }
 .links a { color: var(--amber); white-space: nowrap; }
 .toggle { display: inline-flex; align-items: center; gap: 0.4em; color: var(--muted); cursor: pointer; white-space: nowrap; }
+/* The way out. The toggle at the top scrolls away on a short screen, so the guide also ends
+   with the action someone actually wants after reading it. */
+.done { display: flex; justify-content: center; }
+.done .cta { flex: 0 1 auto; padding: 0.6em 1.6em; }
+#landing.compact .done { display: none; }
+
 .foot { text-align: center; color: var(--muted); font-size: var(--fs-sm); font-family: system-ui, sans-serif; margin: 0; }
 .mini { display: none; }
 

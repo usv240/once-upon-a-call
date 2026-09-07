@@ -14,7 +14,7 @@ const VIEWPORTS = [
   { name: '4k     3840x2160', width: 3840, height: 2160 },
 ];
 
-const BLOCKS = ['.hero', '.call-card', '.story-card', '.keys-card', '.steps', '.links', '.foot'];
+const BLOCKS = ['.hero', '.call-card', '.story-card', '.keys-card', '.steps', '.done', '.links', '.foot'];
 const HERO_ITEMS = ['.brand', '.mini', '#status', '#toggle-landing'];
 const TRY_ITEMS = ['#preview-btn', '.try-hint'];
 
@@ -166,6 +166,27 @@ function overlaps(a, b) {
   console.log('legend:', JSON.stringify(legend));
   if (legend.length !== 5) { console.log(`FAIL  keypad legend has ${legend.length} rows, expected 5`); failures++; }
   if (legend.some((t) => !t)) { console.log('FAIL  keypad legend has an empty row'); failures++; }
+
+  // The guide is the scroll container. With pointer-events:none the wheel falls through to the
+  // 3D canvas and anything below the fold — including the control that closes the guide — is
+  // unreachable. That stranded a real user, so it is a checked property now.
+  const reach = await page.evaluate(() => {
+    const l = document.getElementById('landing');
+    const expanded = getComputedStyle(l).pointerEvents;
+    l.classList.add('compact');
+    const compact = getComputedStyle(l).pointerEvents;
+    l.classList.remove('compact');
+    return {
+      expanded,
+      compact,
+      scrollable: l.scrollHeight > l.clientHeight,
+      doneVisible: !!document.getElementById('done-btn'),
+    };
+  });
+  console.log('reachability:', JSON.stringify(reach));
+  if (reach.expanded === 'none') { console.log('FAIL  expanded guide ignores the mouse, so it cannot be scrolled'); failures++; }
+  if (reach.compact !== 'none') { console.log('FAIL  compact bar swallows clicks meant for the 3D scene'); failures++; }
+  if (!reach.doneVisible) { console.log('FAIL  no way out of the guide at the bottom'); failures++; }
   if (extras.liveRegions !== 1) { console.log(`FAIL  expected exactly 1 live region, found ${extras.liveRegions}`); failures++; }
 
   await page.screenshot({ path: 'expanded.png' });
