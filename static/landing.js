@@ -165,7 +165,14 @@
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (btn === preview) return;
-    if (btn && /storybook|end/i.test(btn.textContent)) landing.classList.add('hidden');
+    // XR Blocks relabels the same button THE END while a session runs. Hide the overlay on
+    // the way in; bring the thin bar back on the way out, or the number and status are gone
+    // for good until a reload.
+    if (btn && /storybook/i.test(btn.textContent)) landing.classList.add('hidden');
+    else if (btn && /the end/i.test(btn.textContent)) {
+      landing.classList.remove('hidden');
+      setCompact(true);
+    }
   });
   window.addEventListener('ouac:ring', () => setStatus('ringing', 'Incoming story call…'));
 

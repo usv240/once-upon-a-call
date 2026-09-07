@@ -274,7 +274,9 @@ This is the headline feature and the thing to rehearse most.
 > waiting in the morning, with the pages turning in your voice. The Little Dragon Who Couldn't
 > Sleep. Press pound when you finish each page. Hang up when you're done."*
 
-**Terminal:** `Listening to keypad on parent leg <uuid> (reading to an empty room)`
+**Terminal:** `Subscribing to keypad on <uuid> (reading to an empty room)` then
+`Listening to keypad on parent leg <uuid> (reading to an empty room)` — **both must appear before
+you press anything**, or `#` will do nothing.
 
 Now read a page aloud and **press `#`**.
 
@@ -367,6 +369,8 @@ npm run test:browser      # needs Chrome installed
 | Old button labels / stale behaviour | Cached JavaScript | **Ctrl+Shift+R**. This is the single most common cause of "it's broken" |
 | `Cannot find module ...` | Dependencies changed | `npm install` |
 | Unattended path won't trigger | A storybook tab is still open somewhere | Close all tabs; terminal must say `Storybook closed (0 left)` |
+| After `npm start`, calls go unattended with the browser open | Server forgot the storybook | Fixed: the tab re-introduces itself on reconnect — look for `Storybook re-introduced itself as xr_user_1`. If you don't see it, hard-refresh |
+| `#` does nothing while reading to the empty room | Keypad never subscribed | Fixed: terminal must show `Subscribing to keypad on <uuid> (reading to an empty room)` right after you choose a story |
 | `TypeError: xb.SpatialPanel is not a constructor` | XR Blocks was upgraded | The importmap is pinned to `595aeb64` on purpose — do not bump it |
 
 ## What to send me if something fails

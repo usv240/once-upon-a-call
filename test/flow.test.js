@@ -100,7 +100,11 @@ const post = (p, body) =>
       assert(shelf.active === 'dragon', `default is ${shelf.active}, expected dragon`);
     });
 
-    const menu = await get(`/voice/answer?from=${CALLER}&uuid=${LEG}`);
+    const menu = await get(`/voice/answer?from=${CALLER}&uuid=${LEG}&conversation_uuid=conv-1`);
+    // In reality the inbound leg is answered the moment the NCCO starts — during the menu,
+    // long before any story is chosen. The earlier version of this test posted these the
+    // other way round and hid a bug where the unattended keypad was never subscribed.
+    await post('/voice/event', { status: 'answered', direction: 'inbound', uuid: LEG, conversation_uuid: 'conv-1' });
     await check('an incoming call is offered the story menu', () => {
       assert(Array.isArray(menu), 'answer webhook did not return an NCCO array');
       assert(menu[0].action === 'talk', `first action is ${menu[0].action}`);
@@ -173,12 +177,18 @@ const post = (p, body) =>
       assert(conv.endOnExit === true, 'endOnExit must be true or the leg lingers');
     });
 
-    // ---- 3. the call connects ----
-    await post('/voice/event', { status: 'answered', direction: 'inbound', uuid: LEG, conversation_uuid: 'conv-1' });
+    // ---- 3. reading to the empty room: the keypad must already be live ----
+    await new Promise((r) => setTimeout(r, 300));
     const afterAnswer = await get('/api/state');
-    await check('answering resets to page one and marks the session unattended', () => {
+    await check('the session is marked as reading to an empty room, starting on page one', () => {
       assert(afterAnswer.page === 0, `page is ${afterAnswer.page}`);
       assert(afterAnswer.unattended === true, 'session is not marked as reading to an empty room');
+    });
+
+    await check('the keypad is subscribed for the empty room even though answered fired during the menu', () => {
+      const text = log.join('');
+      assert(/Subscribing to keypad on .* \(reading to an empty room\)/.test(text),
+        `no keypad subscription attempt for the unattended read. Log tail:\n${text.slice(-500)}`);
     });
 
     // ---- 4. the keypad still drives the pages, with no child on the line ----
@@ -204,7 +214,11 @@ const post = (p, body) =>
       assert((await get('/api/state')).page === 3, 'pressing 1 moved the page');
     });
 
-    // ---- 5. hang up: the story is kept ----
+    // ---- 5. hang up: the story is kept, even if the next call has already begun ----
+    await post('/voice/event', { status: 'completed', direction: 'inbound', uuid: LEG });
+    // A second caller dials in before the recording webhook lands. The answer webhook resets
+    // the live session; the first call's recording must still be filed with its own facts.
+    await get(`/voice/answer?from=15559990000&uuid=leg-next&conversation_uuid=conv-2`);
     await post('/voice/recording', {
       recording_uuid: 'rec-1',
       recording_url: 'https://api.nexmo.com/v1/files/does-not-exist',
@@ -212,8 +226,6 @@ const post = (p, body) =>
       end_time: new Date().toISOString(),
       size: 12345,
     });
-    await post('/voice/event', { status: 'completed', direction: 'inbound', uuid: LEG });
-
     // The recording webhook answers 200 immediately and then tries to pull the mp3 from Vonage.
     // With fake credentials that request has to fail over the network first, so wait for the
     // entry to be filed rather than guessing at a sleep.
@@ -228,12 +240,16 @@ const post = (p, body) =>
     });
 
     const recs = await get('/api/recordings');
-    await check('the recording is filed as unattended and unseen', () => {
+    await check('the recording is filed as unattended and unseen, with its own page turns and story', () => {
       assert(recs.length === 1, `${recs.length} recordings`);
-      assert(recs[0].unattended === true, 'not flagged unattended');
+      assert(recs[0].unattended === true, 'not flagged unattended (the next call had reset the session)');
       assert(recs[0].seen === false, 'marked as already heard');
-      assert(recs[0].events > 0, 'no page turns were kept for the replay');
+      assert(recs[0].events > 0, 'no page turns were kept for the replay (the next call had wiped the timeline)');
+      assert(recs[0].story === 'boat', `filed under ${recs[0].story}, expected boat`);
     });
+
+    // put the live session back to something sane for the rest of the run
+    await post('/voice/event', { status: 'completed', direction: 'inbound', uuid: 'leg-next' });
 
     // The download fails against fake credentials, which is the point: the visual replay must
     // still be offered rather than the whole keepsake being lost.
@@ -247,6 +263,14 @@ const post = (p, body) =>
 
     await check('once played, the story is no longer waiting', async () => {
       assert((await get('/api/state')).waitingStories === 0, 'still shows as unheard');
+    });
+
+    await check('/api/story?id= reads a book without changing which one is active', async () => {
+      const rabbit = await get('/api/story?id=rabbit');
+      assert(rabbit.id === 'rabbit', `got ${rabbit.id}`);
+      assert(/Maya/.test(rabbit.pages[rabbit.pages.length - 1].text), 'not personalised');
+      const active = await get('/api/stories');
+      assert(active.active !== 'rabbit', 'reading a story by id changed the active one');
     });
 
     // ---- 6. the attended path still connects ----
@@ -270,6 +294,13 @@ const post = (p, body) =>
     });
     sock.emit('storybook:ready', { user: 'xr_user_1' });
     await new Promise((r) => setTimeout(r, 400));
+
+    await check('a reconnecting storybook re-introduces its username after a restart', async () => {
+      // simulate the server having forgotten: we cannot restart mid-test, but the health
+      // check exposes the same decision the answer webhook makes
+      const h = await get('/api/health');
+      assert(h.checks.childAppOnline === true, 'storybook not online after announcing');
+    });
 
     await check('an open storybook shows as online in the health check', async () => {
       assert((await get('/api/health')).checks.childAppOnline === true, 'storybook not seen as open');

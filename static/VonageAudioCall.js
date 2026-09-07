@@ -540,12 +540,15 @@ export class VonageAudioCall extends xb.Script {
     try {
       const response = await fetch(`/token?name=${name}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      this.token = (await response.json()).token;
+      const issued = await response.json();
+      this.token = issued.token;
+      this.username = issued.username || name.toLowerCase().replaceAll(' ', '-');
       const sessionId = await this.client.createSession(this.token);
       console.log('Session created successfully. Session ID:', sessionId);
       // Tell the server there is a storybook open to ring. Without this a closed tab still
       // looks answerable and the caller waits out a ring timeout for nothing.
-      this.socket?.emit('storybook:ready', { user: name });
+      this.sessionReady = true;
+      this._announce();
       this._setStatus('Waiting for a story call…');
     } catch (error) {
       console.error('Connection failed:', error);
@@ -554,9 +557,16 @@ export class VonageAudioCall extends xb.Script {
   }
 
   // ===================== server events =====================
+  _announce() {
+    if (this.sessionReady && this.socket) this.socket.emit('storybook:ready', { user: this.username });
+  }
+
   _connectStorySocket() {
     if (typeof io === 'undefined') return console.warn('socket.io client not loaded');
     this.socket = io();
+    // Fires on the first connection and on every reconnect. After `npm start` the server has
+    // forgotten us; this is how it learns there is still a storybook open and what to ring.
+    this.socket.on('connect', () => this._announce());
     this.socket.on('state', (s) => {
       const pageChanged = s.page !== this.state.page;
       this.state = s;
@@ -581,6 +591,7 @@ export class VonageAudioCall extends xb.Script {
     // call connects. Drop the old one so the next preview or call builds the right story.
     this.socket.on('story', async () => {
       this._stopPreview();
+      this._stopReplay();
       try {
         this.story = await (await fetch('/api/story')).json();
       } catch (e) {
@@ -789,10 +800,17 @@ export class VonageAudioCall extends xb.Script {
       this._setStatus('No saved story yet.');
       return;
     }
-    // The recording may be of a different book than the one currently on the shelf.
+    // The recording may be of a different book than tonight's. Swap it in for the replay and
+    // restore the active one when the replay stops; the old code re-fetched the *active* story
+    // here and rendered the wrong book.
     if (data.story && data.story !== this.story?.id) {
       try {
-        this.story = await (await fetch('/api/story')).json();
+        const recorded = await (await fetch(`/api/story?id=${encodeURIComponent(data.story)}`)).json();
+        if (recorded?.id === data.story) {
+          this._activeStory = this.story;
+          this.story = recorded;
+          this._removeBook();
+        }
       } catch (e) {
         /* keep what we have */
       }
@@ -847,6 +865,12 @@ export class VonageAudioCall extends xb.Script {
     this.replay.audio?.pause();
     this.replay = null;
     this.book?.setBanner('');
+    if (this._activeStory) {
+      // back to tonight's book
+      this.story = this._activeStory;
+      this._activeStory = null;
+      this._removeBook();
+    }
     if (!this.callId) {
       this._setStatus('Waiting for a story call…');
       this.updateControlRow('IDLE');

@@ -200,6 +200,7 @@ app.get('/token', async (req, res) => {
   const username = await createUser(displayName);
   session.userLoggedIn = username;
   console.log(`Token issued for ${username}`);
+  res.locals.username = username;
   const token = tokenGenerate(appId, privateKey, {
     exp: Math.round(Date.now() / 1000) + 86400,
     sub: username,
@@ -213,7 +214,7 @@ app.get('/token', async (req, res) => {
       },
     },
   });
-  res.json({ token });
+  res.json({ token, username });
 });
 
 // ---------- NCCO builders ----------
@@ -339,7 +340,17 @@ app.get('/voice/answer', (req, res) => {
 
   // Phone -> app: the story call
   if (from && !req.query.from_user) {
+    // This is the earliest point in a new call — Vonage cannot do anything until it has this
+    // NCCO — so this is where the previous call's state is cleared. Clearing it on the
+    // 'answered' event instead was too late: story-choice could run first and set
+    // unattended, only to have it wiped.
     session.parentNumber = from;
+    session.parentLeg = req.query.uuid || null;
+    session.conversationUuid = req.query.conversation_uuid || null;
+    session.page = 0;
+    session.timeline = [];
+    session.unattended = false;
+    session.dtmfSubscribed = false;
     const allowed = APPROVED_NUMBERS.length === 0 || APPROVED_NUMBERS.includes(from);
     if (!allowed && FAMILY_PIN) return res.json(pinNCCO());
     if (!allowed) {
@@ -362,7 +373,11 @@ app.post('/voice/pin', (req, res) => {
   const digits = String(req.body?.dtmf?.digits || '').trim();
   console.log('PIN entered:', digits ? '****' : '(none)');
   if (digits && digits === FAMILY_PIN) {
-    return res.json(STORIES.length > 1 ? menuNCCO() : storyNCCO(req.body.from));
+    if (STORIES.length > 1) return res.json(menuNCCO());
+    const ncco = storyNCCO(req.body.from);
+    res.json(ncco);
+    if (session.unattended) listenToKeypad('reading to an empty room');
+    return;
   }
   return res.json([{ action: 'talk', language: 'en-US', text: "That PIN isn't right. Goodbye." }]);
 });
@@ -372,9 +387,21 @@ app.post('/voice/pin', (req, res) => {
 app.post('/voice/story-choice', (req, res) => {
   const digit = String(req.body?.dtmf?.digits || '').trim();
   const picked = STORIES[Number(digit) - 1];
+  const proceed = () => {
+    const ncco = storyNCCO(req.body?.from);
+    res.json(ncco);
+    // storyNCCO just decided whether anyone is home. If not, the keypad is the caller's whole
+    // interface and has to be live before they reach the first page — the 'answered' event
+    // fired long ago, during the menu, and could not know yet.
+    if (session.unattended) {
+      if (!session.parentLeg && req.body?.uuid) session.parentLeg = req.body.uuid;
+      listenToKeypad('reading to an empty room');
+    }
+  };
+
   if (picked) {
     setStory(picked.id || 'default', `chosen on the keypad: ${digit}`);
-    return res.json(storyNCCO(req.body?.from));
+    return proceed();
   }
 
   // Nothing pressed, or a digit with no story behind it. Defaulting on the first miss is a
@@ -386,15 +413,17 @@ app.post('/voice/story-choice', (req, res) => {
     return res.json(menuNCCO(attempt + 1));
   }
   console.log(`Story menu: no choice after ${attempt + 1} attempts, keeping ${session.storyId}`);
-  res.json(storyNCCO(req.body?.from));
+  proceed();
 });
 
 // Subscribing twice is an error and forgetting to subscribe is a silent dead keypad, so it
 // happens in exactly one place. Attended calls wait for the child to answer; unattended ones
 // start as soon as the caller is on the line, because the keypad is all they have.
 async function listenToKeypad(why) {
-  if (!session.parentLeg || session.dtmfSubscribed) return;
+  if (!session.parentLeg) return console.warn(`Cannot listen to keypad yet (${why}): no parent leg known`);
+  if (session.dtmfSubscribed) return;
   session.dtmfSubscribed = true;
+  console.log(`Subscribing to keypad on ${session.parentLeg} (${why})`);
   try {
     await vonage.voice.subscribeDTMF(session.parentLeg, `${BASE_URL}/voice/dtmf`);
     console.log(`Listening to keypad on parent leg ${session.parentLeg} (${why})`);
@@ -414,10 +443,9 @@ app.all('/voice/event', async (req, res) => {
   // Parent's phone leg answered
   if (ev.status === 'answered' && ev.direction === 'inbound' && ev.uuid) {
     session.parentLeg = ev.uuid;
-    session.conversationUuid = ev.conversation_uuid;
-    session.page = 0;
-    session.timeline = [];
-    session.dtmfSubscribed = false;
+    session.conversationUuid = ev.conversation_uuid || session.conversationUuid;
+    // Nothing is reset here: the answer webhook already did that for this call. If the story
+    // has already been chosen and we are reading to an empty room, the keypad starts now.
     if (session.unattended) await listenToKeypad('reading to an empty room');
     broadcastState();
   }
@@ -432,6 +460,14 @@ app.all('/voice/event', async (req, res) => {
 
   if (ev.status === 'completed' && ev.uuid && ev.uuid === session.parentLeg) {
     console.log(session.unattended ? 'Parent finished reading to the empty room' : 'Parent hung up');
+    // The recording webhook usually lands after this, and sometimes after the *next* call has
+    // already begun and reset the session. Keep what the recording needs to be filed correctly.
+    session.finished = {
+      unattended: session.unattended,
+      storyId: session.storyId,
+      timeline: [...session.timeline],
+      parentNumber: session.parentNumber,
+    };
     session.parentLeg = null;
     session.dtmfSubscribed = false;
     io.emit('call:ended');
@@ -485,6 +521,15 @@ app.post('/voice/recording', async (req, res) => {
   const r = req.body || {};
   console.log('RECORDING ready:', r.recording_url);
   const file = `${r.recording_uuid || Date.now()}.mp3`;
+  // Prefer the snapshot taken at hang-up; fall back to the live session if the recording
+  // arrived first.
+  const done = session.finished || {
+    unattended: session.unattended,
+    storyId: session.storyId,
+    timeline: session.timeline,
+    parentNumber: session.parentNumber,
+  };
+  session.finished = null;
   const entry = {
     file,
     url: `/recordings/${file}`,
@@ -492,11 +537,11 @@ app.post('/voice/recording', async (req, res) => {
     start: r.start_time,
     end: r.end_time,
     size: r.size,
-    events: [...session.timeline],
-    parent: session.parentNumber,
-    story: session.storyId,
-    unattended: session.unattended,
-    seen: !session.unattended, // a story read live has already been heard
+    events: [...done.timeline],
+    parent: done.parentNumber,
+    story: done.storyId,
+    unattended: done.unattended,
+    seen: !done.unattended, // a story read live has already been heard
   };
   try {
     await vonage.voice.downloadRecording(r.recording_url, path.join(RECORDINGS_DIR, file));
@@ -508,8 +553,9 @@ app.post('/voice/recording', async (req, res) => {
   session.recordings.push(entry);
   io.emit('recording', { count: session.recordings.length, unattended: entry.unattended });
   if (entry.unattended) {
+    const told = STORIES.find((st) => (st.id || 'default') === entry.story) || STORIES[0];
     console.log(`A story is waiting for ${CHILD_NAME} in the morning.`);
-    io.emit('waiting-story', { title: activeStory().title, parent: PARENT_NAME });
+    io.emit('waiting-story', { title: told.title, parent: PARENT_NAME });
   }
   broadcastState();
 
@@ -556,7 +602,13 @@ app.post('/api/say', async (req, res) => {
 });
 
 // ---------- misc API ----------
-app.get('/api/story', (req, res) => res.json(activeStory()));
+app.get('/api/story', (req, res) => {
+  // ?id= reads a specific book without changing which one is active — replay needs the story
+  // the recording was made from, which may not be tonight's.
+  const id = String(req.query.id || '');
+  const raw = id && STORIES.find((st) => (st.id || 'default') === id);
+  res.json(raw ? personalise(raw) : activeStory());
+});
 
 // The shelf, and the child's way of choosing from it.
 app.get('/api/stories', (req, res) =>
@@ -645,7 +697,13 @@ io.on('connection', (socket) => {
 
   // Only the storybook itself announces; the caregiver page and the printable card also hold
   // sockets and must not make a closed storybook look open.
-  socket.on('storybook:ready', () => {
+  socket.on('storybook:ready', (payload) => {
+    // After `npm start` the browser is still open and still holds a live Vonage session, but
+    // this process has forgotten the username it needs to ring it. Take it from the client.
+    if (!session.userLoggedIn && payload?.user) {
+      session.userLoggedIn = String(payload.user);
+      console.log(`Storybook re-introduced itself as ${session.userLoggedIn}`);
+    }
     session.storybooks.add(socket.id);
     console.log(`Storybook open (${session.storybooks.size} on this server)`);
     broadcastState();
