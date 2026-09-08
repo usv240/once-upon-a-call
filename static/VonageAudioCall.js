@@ -334,10 +334,16 @@ export class VonageAudioCall extends xb.Script {
     this.book.setBanner(`${this.story.parentName || 'Parent'} pressed ${key}: ${fx.label}`);
   }
 
-  // Phone audio is quiet in a browser tab, so we add a gain stage (?gain=3 to push it further).
-  // Critical: the raw <audio> element is only silenced while the boosted path is actually
-  // running. Browsers suspend an AudioContext until a user gesture, and muting the element
-  // before that would leave the child hearing nothing at all.
+  // Phone audio is quiet in a browser tab, so we add a gain stage (?gain=4 pushes it further,
+  // ?gain=1 switches it off entirely).
+  //
+  // The rule that matters: the <audio> element is the known-good path and is NEVER muted on a
+  // guess. An earlier version muted it the moment the AudioContext reported "running" - which is
+  // a statement about the context, not about whether any sound is reaching the speakers. A
+  // boosted path carrying nothing then produced total silence on a live call. Now an analyser
+  // watches the boosted signal and the element is muted only once real audio has been measured
+  // coming through it. If that never happens we put the element back and take the quieter audio,
+  // because quiet beats silent.
   _boostAudio(audioElement, stream) {
     if (!audioElement) return;
     audioElement.muted = false;
@@ -346,30 +352,64 @@ export class VonageAudioCall extends xb.Script {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC || !(gainValue > 1)) return;
     try {
-      const ctx = this._audio() || (this.audioCtx = new AC());
+      const ctx = this._audio();
+      if (!ctx) return;
       const src = ctx.createMediaStreamSource(stream);
       const gain = ctx.createGain();
       gain.gain.value = gainValue;
-      src.connect(gain).connect(ctx.destination);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      src.connect(gain);
+      gain.connect(analyser);
+      gain.connect(ctx.destination);
 
-      const sync = () => {
-        const running = ctx.state === 'running';
-        audioElement.muted = running; // only mute once the boosted path is audible
-        console.log(`Call audio: context ${ctx.state}, boost x${gainValue}, element ${running ? 'muted' : 'playing'}`);
+      const buf = new Uint8Array(analyser.fftSize);
+      const started = Date.now();
+      let settled = false;
+      const check = () => {
+        if (settled || !this._boost) return;
+        analyser.getByteTimeDomainData(buf);
+        let peak = 0;
+        for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
+
+        if (ctx.state === 'running' && peak > 2) {
+          settled = true;
+          audioElement.muted = true; // proven: the boosted path is carrying the parent's voice
+          console.log('Call audio: boosted path carrying (x' + gainValue + '), element muted');
+          return;
+        }
+        if (Date.now() - started > 6000) {
+          settled = true;
+          audioElement.muted = false;
+          try {
+            gain.disconnect();
+            src.disconnect();
+          } catch (e) {}
+          console.warn('Call audio: boost measured no signal, falling back to the audio element');
+          return;
+        }
+        setTimeout(check, 200);
       };
-      ctx.addEventListener?.('statechange', sync);
-      ctx.resume().then(sync).catch(sync);
-      sync();
+      setTimeout(check, 250);
 
-      // Any click/keypress lets the browser start the context, so re-check then too.
-      const resume = () => ctx.resume().then(sync).catch(() => {});
+      // Any gesture can start a suspended context, so keep nudging it while we wait.
+      const resume = () => ctx.resume().catch(() => {});
       window.addEventListener('pointerdown', resume);
       window.addEventListener('keydown', resume);
-      this._boost = { src, gain, ctx, resume, audioElement, sync };
+      this._boost = { src, gain, analyser, ctx, resume, audioElement };
     } catch (e) {
       console.warn('Audio boost unavailable, playing unboosted', e);
       audioElement.muted = false;
     }
+  }
+
+  // Poll briefly for the remote stream rather than assuming it is attached on the first tick.
+  _whenStream(audioElement, fn, waitedMs = 0) {
+    if (!audioElement) return console.warn('No audio output element from the Client SDK');
+    const stream = audioElement.srcObject;
+    if (stream && stream.getAudioTracks && stream.getAudioTracks().length) return fn(stream);
+    if (waitedMs >= 5000) return console.warn('Remote audio stream never arrived');
+    setTimeout(() => this._whenStream(audioElement, fn, waitedMs + 200), 200);
   }
 
   _stopBoost() {
@@ -424,13 +464,26 @@ export class VonageAudioCall extends xb.Script {
         g.gain.exponentialRampToValueAtTime(0.85, t + 0.04); // fast attack, no click
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
       } else if (kind === 'twinkle') {
-        o.type = 'sine';
-        o.frequency.setValueAtTime(1200, t);
-        o.frequency.setValueAtTime(1800, t + 0.09);
-        o.frequency.setValueAtTime(2400, t + 0.18);
+        // A pure sine up at 2kHz barely registers on a laptop speaker. A triangle has harmonics
+        // to catch, the arpeggio is slower so each note reads as a note, and a detuned second
+        // oscillator gives it shimmer instead of a thin bleep.
+        o.type = 'triangle';
+        const notes = [1046, 1318, 1568, 2093];
+        notes.forEach((f, i) => o.frequency.setValueAtTime(f, t + i * 0.1));
+        const o2 = ctx.createOscillator();
+        o2.type = 'sine';
+        notes.forEach((f, i) => o2.frequency.setValueAtTime(f * 2.01, t + i * 0.1));
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.0001, t);
+        g2.gain.exponentialRampToValueAtTime(0.3, t + 0.04);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+        o2.connect(g2);
+        g2.connect(ctx.destination);
+        o2.start(t);
+        o2.stop(t + 1.1);
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.6, t + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+        g.gain.exponentialRampToValueAtTime(0.9, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
       } else {
         o.type = 'triangle';
         o.frequency.setValueAtTime(220, t);
@@ -484,9 +537,11 @@ export class VonageAudioCall extends xb.Script {
         this.book?.setBanner(`${this.story?.parentName || 'Parent'} is on the line…`);
         this._createReplyPanel();
 
+        // The SDK may not have attached the remote stream by the time answer() resolves. Testing
+        // once and giving up would lose the boost, the avatar and the word highlighting together
+        // - the entire live half of the demo - so wait for it instead.
         const audioElement = this.client.getAudioOutputElement();
-        const remoteStream = audioElement?.srcObject;
-        if (remoteStream) {
+        this._whenStream(audioElement, (remoteStream) => {
           this._boostAudio(audioElement, remoteStream);
           this._createAvatar(remoteStream);
           this.listener = new StoryListener({
@@ -497,7 +552,7 @@ export class VonageAudioCall extends xb.Script {
             },
           });
           this.listener.start(remoteStream);
-        }
+        });
       })
       .catch((error) => console.error('Error answering call: ', error));
   }
