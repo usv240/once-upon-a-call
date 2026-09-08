@@ -318,21 +318,25 @@ const post = (p, body) =>
       const tail = actions.slice(actions.indexOf('connect') + 1);
       assert(tail.includes('conversation'), 'no fallback if the child never picks up');
       assert(
-        Array.isArray(connect.eventUrl) && connect.eventUrl.length,
-        'connect reports no events, so nothing can notice it gave up'
-      );
-      assert(
         connect.timeout >= 40,
         `ring timeout of ${connect.timeout}s is too short for someone to hear it and answer`
       );
+      assert(
+        !connect.eventUrl,
+        'connect has its own eventUrl, which diverts this leg away from /voice/event - where ' +
+          'the handler that starts the parent keypad lives'
+      );
     });
 
-    // The bug this guards: when the ring times out the NCCO reads on into the unattended tail,
-    // but nothing told the session. The reading was then filed as an ordinary call - no page
-    // numbers spoken back, no story waiting in the morning - while the caller had just been
-    // told nobody was there.
-    await post('/voice/connect-status', { status: 'timeout', uuid: 'app-leg-1' });
-    await new Promise((r) => setTimeout(r, 200));
+    // The bug this guards: when the ring is never answered the NCCO reads on into the unattended
+    // tail, but nothing told the session. The reading was then filed as an ordinary call - no
+    // page numbers spoken back, recording marked already-seen, no story waiting in the morning -
+    // while the caller had just been told nobody was there.
+    const ring = (status) =>
+      post('/voice/event', { status, direction: 'outbound', to: 'xr_user_1', uuid: 'app-leg-1' });
+
+    await ring('timeout');
+    await new Promise((r) => setTimeout(r, 250));
     await check('a ring nobody answers becomes a story read to the empty room', async () => {
       const state = await get('/api/state');
       assert(state.unattended === true, 'the fallthrough reading is still filed as an attended call');
@@ -346,13 +350,16 @@ const post = (p, body) =>
       );
     });
 
-    await check('a connect that is answered does not trigger the empty-room path', async () => {
-      await post('/voice/connect-status', { status: 'answered', uuid: 'app-leg-2' });
-      await new Promise((r) => setTimeout(r, 150));
-      // answered goes through the main event handler, not this one; nothing here should flip
-      const text = log.join('');
-      const hits = text.split('the storybook did not answer').length - 1;
-      assert(hits === 1, `answered was treated as a give-up (${hits} times)`);
+    await check('the child answering later takes it back off the empty-room path', async () => {
+      await post('/voice/event', {
+        status: 'answered',
+        direction: 'outbound',
+        to: 'xr_user_1',
+        uuid: 'app-leg-2',
+      });
+      await new Promise((r) => setTimeout(r, 250));
+      const state = await get('/api/state');
+      assert(state.unattended === false, 'still reading to an empty room after the child answered');
     });
 
     sock.close();

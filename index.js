@@ -316,7 +316,8 @@ function storyNCCO(from) {
       // answer. Miss it and the caller is told nobody is there while the child is looking
       // straight at the storybook - the worst outcome this app has.
       timeout: 45,
-      eventUrl: [`${BASE_URL}/voice/connect-status`],
+      // No eventUrl here, on purpose. Giving the connect its own diverts this leg's events away
+      // from /voice/event - including the `answered` that starts the parent's keypad.
       endpoint: [{ type: 'app', user: session.userLoggedIn }],
     },
     // If the connect never completes — the child is asleep, the tablet is face-down, the app
@@ -443,29 +444,6 @@ async function listenToKeypad(why) {
   }
 }
 
-// The connect leg's own events. Reaching this with anything but `answered` means the NCCO has
-// fallen through to the unattended tail: the caller is about to be told nobody is there and
-// invited to read anyway. The session has to know, or the reading that follows is filed as an
-// ordinary call - no page numbers spoken back, no story waiting in the morning.
-app.post('/voice/connect-status', async (req, res) => {
-  const ev = req.body || {};
-  res.sendStatus(200);
-  const status = ev.status || '';
-  if (!status) return;
-  console.log(`CONNECT ${status} leg=${ev.uuid || ''}`);
-
-  if (status === 'answered') return; // the child made it; the main handler takes over
-
-  const gaveUp = ['timeout', 'unanswered', 'rejected', 'busy', 'failed', 'cancelled'].includes(status);
-  if (!gaveUp || !session.parentLeg) return;
-
-  console.log(`Nobody answered the storybook (${status}) - reading to the empty room instead`);
-  session.unattended = true;
-  session.page = 0;
-  await listenToKeypad('the storybook did not answer');
-  broadcastState();
-});
-
 // ---------- call lifecycle ----------
 app.all('/voice/event', async (req, res) => {
   const ev = req.body || {};
@@ -488,6 +466,25 @@ app.all('/voice/event', async (req, res) => {
     mark('page', { page: 0 });
     session.unattended = false; // the child made it after all
     await listenToKeypad('the child answered');
+    broadcastState();
+  }
+
+  // The ring to the storybook ended without being answered, so the NCCO is about to read on
+  // into the unattended tail. The session has to agree, or the reading that follows is filed as
+  // an ordinary call: no page numbers spoken back, recording marked already-seen, no story
+  // waiting in the morning - exactly what the fallthrough exists to provide.
+  const GAVE_UP = ['timeout', 'unanswered', 'rejected', 'busy', 'failed', 'cancelled'];
+  if (
+    GAVE_UP.includes(ev.status) &&
+    ev.direction === 'outbound' &&
+    ev.to === session.userLoggedIn &&
+    session.parentLeg &&
+    !session.unattended
+  ) {
+    console.log(`Nobody answered the storybook (${ev.status}) - reading to the empty room instead`);
+    session.unattended = true;
+    session.page = 0;
+    await listenToKeypad('the storybook did not answer');
     broadcastState();
   }
 
@@ -738,7 +735,17 @@ io.on('connection', (socket) => {
       console.log(`Storybook re-introduced itself as ${session.userLoggedIn}`);
     }
     session.storybooks.add(socket.id);
-    console.log(`Storybook open (${session.storybooks.size} on this server)`);
+    const open = session.storybooks.size;
+    console.log(`Storybook open (${open} on this server)`);
+    if (open > 1) {
+      // Every tab signs in as the same Client SDK user. The newest session takes that user over
+      // and the older tab's leg dies mid-connect - which looks from the phone exactly like the
+      // child never picking up, so the caller is told nobody is there while someone is sitting
+      // in front of the storybook.
+      console.warn(`!! ${open} storybooks are open on the same user (${session.userLoggedIn || '?'}).`);
+      console.warn('   They fight over the call and the older tab drops mid-answer.');
+      console.warn('   Close all but one before dialling.');
+    }
     broadcastState();
   });
 
