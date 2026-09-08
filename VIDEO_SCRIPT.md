@@ -22,6 +22,12 @@ make the cut.
 
 ## Before you hit record
 
+**Check the child's name first.** Every prompt quoted below says *Maya*, which is what the story
+files carry - but `CHILD_NAME` in `.env` overrides them, and yours has been speaking a different
+name. Either set `CHILD_NAME=Maya` in `.env` to match this script, or read the script knowing the
+phone will say your name instead. A name that changes between takes is invisible while filming
+and obvious on playback.
+
 - `npm run demo` running. Wait for **`Public URL reachable`** before anything else.
 - Chrome full-screen on the storybook. Terminal on a second window you can cut to.
 - **Headphones in the laptop** or the phone will pick up the laptop speakers and echo.
@@ -80,7 +86,11 @@ judge is decoding instead of watching. Beats 4 to 6 earn the technical credit an
 
 ## Beat 4 — Reading, and the words lighting up (1:25–2:00)
 
-**DO:** Read page one aloud into the phone, slowly.
+**DO:** Read page one aloud into the phone, slowly. It is on screen in front of you, but so you
+know what is coming:
+
+> **PAGE 1:** "In a burrow under the old oak tree lived a small brown rabbit named Juniper, who
+> was very good at waiting."
 
 **POINT AT** the words as they highlight.
 
@@ -164,9 +174,24 @@ you do mid-call can move a connected call onto this path.*
 
 > **SAY:** "The call doesn't fail. It doesn't hang up. It invites them to read anyway."
 
-**DO:** Read a page aloud. Press **#**.
+**DO:** Read page one aloud, then press **#**.
+
+*You have no screen in this shot - the storybook is closed, which is the whole point - so the
+pages are here. This is* The Rabbit Who Waited for the Moon*, the book you chose by pressing 2.*
+
+> **PAGE 1:** "In a burrow under the old oak tree lived a small brown rabbit named Juniper, who
+> was very good at waiting."
 
 **EXPECT:** the phone says *"Page 2."*
+
+**DO:** Read page two, then press **#** again, then hang up.
+
+> **PAGE 2:** "Every evening Juniper sat in the meadow and watched the sky, because the moon had
+> promised to come back."
+
+*Two pages is enough - it proves the page turns are being recorded without spending screen time.
+Read them slowly and warmly. This is the recording the child hears in the morning, and it is the
+audio playing under Beat 8.*
 
 > **SAY:** "Vonage records it. The keypad still marks every page turn. And the page number is spoken back, so a parent reading into an empty room knows it registered."
 
