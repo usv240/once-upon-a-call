@@ -62,6 +62,37 @@ Existing products (Caribu, Readeo, Storybook Dads, United Through Reading) are e
 
 ## How it works
 
+One call, two endings. The right-hand branch is the part that makes this more than a phone
+remote: when there is nobody to answer, the call is not wasted - it becomes something the child
+opens in the morning.
+
+```mermaid
+flowchart TD
+    A["Parent dials the Vonage number<br/>(any phone - flip phone, payphone, prison handset)"] --> B{"Approved caller<br/>or family PIN?"}
+    B -->|no| Z["Call ends politely"]
+    B -->|yes| C["Keypad menu:<br/>choose tonight's story"]
+    C --> D{"Is a storybook<br/>open right now?"}
+
+    D -->|yes| E["connect - the parent's voice<br/>arrives in the child's room"]
+    E --> F["Live: lip-synced avatar, Deepgram ASR<br/>lights up each word, keypad turns pages<br/>and fires effects, child's star sends a<br/>hug into the parent's ear alone"]
+    F --> G["Hang up - Vonage recording downloaded,<br/>page turns saved as a timeline"]
+
+    D -->|no| H["'She isn't at the storybook right now.<br/>Read anyway - it will be waiting.'"]
+    H --> I["record + conversation:<br/>the parent reads to an empty room"]
+    I --> J["Keypad still writes the timeline;<br/>the page number is spoken back<br/>so they know it registered"]
+    J --> G
+
+    G --> K["Morning: 'Dad read you a story last night'<br/>- it plays back with the pages turning<br/>in his own voice"]
+
+    style H fill:#2d1b4e,stroke:#8b5cf6,color:#fff
+    style I fill:#2d1b4e,stroke:#8b5cf6,color:#fff
+    style J fill:#2d1b4e,stroke:#8b5cf6,color:#fff
+    style K fill:#1e3a2f,stroke:#10b981,color:#fff
+```
+
+<details>
+<summary>The same thing with every endpoint named</summary>
+
 ```
 Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
                           │  NCCO: talk (welcome) → [input PIN if not approved]
@@ -82,6 +113,8 @@ Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
    No phone to hand?  ▶ Watch the story ──▶ browser speech synthesis narrates the same book,
                                             driving the same highlight / effect / page code.
 ```
+
+</details>
 
 ### Vonage Voice API features used (and why)
 
