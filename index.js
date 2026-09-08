@@ -129,6 +129,7 @@ const session = {
   conversationUuid: null,
   page: 0,
   unattended: false, // reading to an empty room: nobody answered, record it for the morning
+  lastReplayed: null, // so pressing Replay twice replays the same story, not an older one
   storybooks: new Set(), // socket ids of open storybooks — see childOnline()
   dtmfSubscribed: false,
   timeline: [], // { t, type, data } during the live story (server-side events)
@@ -564,6 +565,16 @@ app.post('/voice/dtmf', (req, res) => {
 app.post('/voice/recording', async (req, res) => {
   res.sendStatus(200);
   const r = req.body || {};
+
+  // The conversation's eventUrl carries that action's whole lifecycle, not only its recording.
+  // Filing those as recordings creates entries with no audio and an empty timeline, which then
+  // compete with the real one for the morning replay - the child opens the book and gets a
+  // story with no page turns, or nothing at all.
+  if (!r.recording_url) {
+    if (r.status) console.log(`Conversation ${r.status}`);
+    return;
+  }
+
   console.log('RECORDING ready:', r.recording_url);
   const file = `${r.recording_uuid || Date.now()}.mp3`;
   // Prefer the snapshot taken at hang-up; fall back to the live session if the recording
@@ -720,11 +731,20 @@ app.get('/api/replay/latest', (req, res) => {
   // they were present for.
   const latest =
     reversed.find((r) => r.unattended && !r.seen && r.url && r.fromRoom) ||
+    // Nothing new to hear? Play back whatever was played last, rather than digging up an older
+    // one that may predate half these fixes.
+    (session.lastReplayed && session.recordings.includes(session.lastReplayed)
+      ? session.lastReplayed
+      : null) ||
     reversed.find((r) => r.unattended && !r.seen && r.url) ||
     reversed.find((r) => r.unattended && !r.seen) ||
     reversed.find((r) => r.url) ||
     session.recordings[session.recordings.length - 1];
   if (!latest) return res.status(404).json({ error: 'no recording yet' });
+  // Marking it seen is what moves it out of "waiting for the morning". It must not mean that
+  // pressing Replay a second time falls through to some older, emptier recording - which is
+  // exactly the sort of thing that happens on the take you keep.
+  session.lastReplayed = latest;
   latest.seen = true;
   broadcastState();
   const startTime = Date.parse(latest.start) || (latest.events[0]?.t ?? Date.now());

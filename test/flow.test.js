@@ -254,6 +254,18 @@ const post = (p, body) =>
       await new Promise((r) => setTimeout(r, 500));
     }
 
+    // The conversation's eventUrl carries its whole lifecycle, not only its recording. Filing
+    // those as recordings makes entries with no audio and an empty timeline, and one of those
+    // surfacing on the morning replay is a storybook that plays a voice and never turns a page.
+    const before = (await get('/api/recordings')).length;
+    await post('/voice/recording?src=room', { status: 'completed', conversation_uuid: 'conv-1' });
+    await post('/voice/recording?src=room', { status: 'started', conversation_uuid: 'conv-1' });
+    await new Promise((r) => setTimeout(r, 400));
+    await check('a conversation lifecycle event is not filed as a recording', async () => {
+      const after = (await get('/api/recordings')).length;
+      assert(after === before, `${after - before} empty recording(s) filed from conversation events`);
+    });
+
     const waiting = await get('/api/state');
     await check('a story read to an empty room is waiting to be heard', () => {
       assert(waiting.waitingStories === 1, `waitingStories is ${waiting.waitingStories}`);
@@ -279,6 +291,19 @@ const post = (p, body) =>
       assert(Array.isArray(replay.events) && replay.events.length > 0, 'replay has no page turns');
       assert(replay.parentName === 'Dad', `parentName is ${replay.parentName}`);
       assert(replay.story === 'boat', `replay names story ${replay.story}`);
+    });
+
+    await check('pressing Replay twice replays the same story, not an older one', async () => {
+      const first = await get('/api/replay/latest');
+      const second = await get('/api/replay/latest');
+      assert(
+        second.audioUrl === first.audioUrl,
+        `second Replay handed back a different recording: ${first.audioUrl} then ${second.audioUrl}`
+      );
+      assert(
+        (second.events || []).length === (first.events || []).length,
+        'second Replay lost the page turns'
+      );
     });
 
     await check('once played, the story is no longer waiting', async () => {
