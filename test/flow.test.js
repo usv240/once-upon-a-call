@@ -136,7 +136,12 @@ const post = (p, body) =>
     await check('after the second miss it proceeds rather than looping forever', () => {
       const actions = (Array.isArray(silent2) ? silent2 : []).map((a) => a.action);
       assert(!actions.includes('input'), 'the menu loops instead of getting on with the story');
-      assert(actions.includes('record'), `did not proceed to a story: ${actions.join(', ')}`);
+      // Nobody is at the storybook in this part of the run, so proceeding means being invited to
+      // read to the empty room - the conversation is what holds that line open.
+      assert(
+        actions.includes('conversation'),
+        `did not proceed to a story: ${actions.join(', ')}`
+      );
     });
 
     await check('the default after two misses is the first book on the shelf', async () => {
@@ -156,8 +161,12 @@ const post = (p, body) =>
     await check('with no child online the caller is invited to read anyway', () => {
       const actions = unattended.map((a) => a.action);
       assert(!actions.includes('connect'), 'still tries to connect to an app that is not there');
-      assert(actions.includes('record'), `no record action: ${actions.join(', ')}`);
       assert(actions.includes('conversation'), `nothing holds the line open: ${actions.join(', ')}`);
+      assert(
+        !actions.includes('record'),
+        'a leg-level record here files a second, prompt-only recording that competes with the ' +
+          'conversation recording for the morning replay'
+      );
       const talk = unattended.find((a) => a.action === 'talk');
       assert(talk, 'the caller is told nothing');
       assert(/still read/i.test(talk.text), `unhelpful message: ${talk.text}`);
@@ -165,10 +174,21 @@ const post = (p, body) =>
       assert(/pound/i.test(talk.text), 'never explains how to turn the page');
     });
 
-    await check('record posts to the recording webhook and asks for mp3', () => {
-      const rec = unattended.find((a) => a.action === 'record');
-      assert(rec.format === 'mp3', `format is ${rec.format}`);
-      assert(rec.eventUrl[0].endsWith('/voice/recording'), 'recording goes to the wrong webhook');
+    // The bug this guards cost a whole evening: a `record` action stops at the mouth of a
+    // conversation. It captured the invitation and then nothing, so the keepsake was sixteen
+    // seconds of a robot saying nobody was home - and the reading, the entire point, was gone.
+    // The recording has to belong to the conversation, because that is where the reading is.
+    await check('the conversation records itself, which is where the reading happens', () => {
+      const conv = unattended.find((a) => a.action === 'conversation');
+      assert(conv.record === true, 'the conversation is not recorded, so the reading is lost');
+      assert(
+        conv.eventUrl && /\/voice\/recording/.test(conv.eventUrl[0]),
+        `conversation recording goes nowhere useful: ${conv.eventUrl}`
+      );
+      assert(
+        /src=room/.test(conv.eventUrl[0]),
+        'the conversation recording is not tagged, so replay cannot prefer it over a leg one'
+      );
     });
 
     await check('the conversation holds the caller alone and ends when they hang up', () => {

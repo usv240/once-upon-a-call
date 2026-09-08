@@ -274,12 +274,19 @@ function unattendedTail(story) {
       text: `${story.childName} isn't at the storybook right now. You can still read tonight's story and it will be waiting in the morning, with the pages turning in your voice. ${story.title}. Press pound when you finish each page. Hang up when you're done.`,
     },
     {
-      // Holds the line open, alone, for as long as they want to read. The record action above
-      // keeps capturing until they hang up.
+      // Holds the line open, alone, for as long as they want to read.
+      //
+      // The recording has to be attached to the conversation, not to the leg. A `record` action
+      // earlier in the NCCO stops at the mouth of a conversation: it captures the invitation
+      // above and then nothing, so the keepsake was sixteen seconds of a robot explaining that
+      // nobody was home. Everything worth keeping happens in here.
       action: 'conversation',
       name: `ouac-solo-${session.conversationUuid || Date.now()}`,
       startOnEnter: true,
       endOnExit: true,
+      record: true,
+      eventUrl: [`${BASE_URL}/voice/recording?src=room`],
+      eventMethod: 'POST',
     },
   ];
 }
@@ -290,10 +297,10 @@ function storyNCCO(from) {
   // No storybook open: go straight to reading for the morning rather than ringing nothing.
   if (!childOnline()) {
     session.unattended = true;
-    return [
-      { action: 'record', eventUrl: [`${BASE_URL}/voice/recording`], format: 'mp3' },
-      ...unattendedTail(story),
-    ];
+    // No `record` action here: the conversation inside unattendedTail records itself. A leg-level
+    // record would only capture the invitation before the conversation begins and then file a
+    // second, useless recording that competes with the real one for the morning replay.
+    return unattendedTail(story);
   }
 
   session.unattended = false;
@@ -571,6 +578,9 @@ app.post('/voice/recording', async (req, res) => {
   const entry = {
     file,
     url: `/recordings/${file}`,
+    // A recording from the conversation is the reading itself. One from a leg is whatever was
+    // said before it - on the transfer path both arrive, and only this one is the keepsake.
+    fromRoom: String(req.query.src || '') === 'room',
     uuid: r.recording_uuid,
     start: r.start_time,
     end: r.end_time,
@@ -709,6 +719,7 @@ app.get('/api/replay/latest', (req, res) => {
   // A story read to an empty room is the one the child has not heard; it wins over anything
   // they were present for.
   const latest =
+    reversed.find((r) => r.unattended && !r.seen && r.url && r.fromRoom) ||
     reversed.find((r) => r.unattended && !r.seen && r.url) ||
     reversed.find((r) => r.unattended && !r.seen) ||
     reversed.find((r) => r.url) ||
