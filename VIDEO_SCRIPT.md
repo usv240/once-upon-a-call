@@ -138,7 +138,11 @@ judge is still parsing "DTMF" when the moment has already passed.*
 
 > **This is your differentiator. Slow down. Give it room.**
 
-> **SAY:** "But here's the thing about those fifteen minutes. You don't get to choose when they happen. The call is scheduled. The child might be asleep."
+> **SAY:** "But here's the thing about a scheduled call. You don't always get to choose when it happens. The child might be asleep."
+
+*This phrasing also keeps the beat general. "Fifteen minutes" was prison-specific; a scheduled
+call covers a deployment window, a ward's one cordless handset, and a shift on the other side of
+the world just as well.*
 
 **DO:** *(cut to the separate take)* Storybook closed. Dial the number. **Let the audio play.**
 
@@ -165,7 +169,7 @@ judge is still parsing "DTMF" when the moment has already passed.*
 
 **EXPECT:** the recording plays, and the pages turn in time with it.
 
-> **SAY:** "In the morning, the child opens the book — and hears last night's story, with the pages turning in their dad's own voice, exactly where he turned them."
+> **SAY:** "In the morning, the child opens the book — and hears last night's story in their dad's own voice, with every page turning exactly where he turned it."
 
 ---
 
