@@ -1,84 +1,160 @@
-# Demo video script (target 3:30 – 4:30, max 5:00)
+# Demo video — shooting script
 
-**Setup for filming**
-- Laptop running the app in Chrome (XR Blocks simulator), screen-recorded (OBS or Windows Game Bar).
-- Your phone in frame on a second camera/phone, or picture-in-picture. Ideally an *old* phone (flip phone / landline handset) for the reach shot.
-- Bedroom-ish backdrop or a stuffed animal on the desk. Keep it warm; this is a bedtime story.
-- Terminal visible for one short cut (judges want to see the Voice API doing the work).
+**Target 4:15. Hard max 5:00.** Every line in **SAY** is meant to be read aloud as written.
+Short sentences on purpose — they are easier to deliver and easier to follow.
 
----
+## The four things the rubric wants (Rules.md)
 
-**0:00 – 0:25 — The problem (voice-over, on-screen text)**
-> "2.7 million kids in the US have a parent in prison tonight. 250,000 have a parent deployed. For all of them, the only thing that reaches home is a plain phone call. No video. No app. Just a voice in a handset."
-Show: three still frames — payphone, ship satellite phone, hospital bedside phone.
+| Criterion | Where this script earns it |
+|---|---|
+| **Technical Execution** — "is the Voice API *meaningfully* integrated" | Beats 3, 4, 5 — a real PSTN call, async DTMF driving AR, per-leg TTS, recording |
+| **Creativity & Originality** — "an unexpected use case" | Beat 7 — the unattended read. This is the beat that wins. |
+| **Real-World Potential** — "a clear problem, a real user" | Beats 1 and 9 |
+| **Presentation Quality** — "understand what you built, why, and how" | The whole thing, and why nothing here is longer than it needs to be |
 
-**0:25 – 0:45 — The idea**
-> "Once Upon a Call turns that phone call into a bedtime story the child can *see*. The parent needs nothing but a phone. The child sees them appear in the room, with a storybook."
-Show: title card + the AR book in the app.
+## Before you hit record
 
-**If anything goes wrong on the day:** press **▶ Watch the story**. The narrated tour drives the
-same page-turn, highlight and effect code as a live call, so you can film the whole experience
-even if the network, the Codespace or the phone lets you down. Never film a broken take.
-
-**0:45 – 1:10 — The call**
-Screen: app open, "Waiting for a story call…". Phone in frame: dial the Vonage number.
-Phone audio (let it play): *"Welcome to Once Upon a Call. Choose tonight's story for Maya. Press 1 for the little dragon who couldn't sleep…"*
-Have the in-call dialpad already open before you dial, so the press is clean on camera.
-**Press 2 on the keypad** — pick the rabbit, then let it turn: the shelf on screen switches to
-The Rabbit Who Waited for the Moon before a word is read.
-> "The parent chooses tonight's book from a keypad menu. They never see a screen."
-Then let it connect. Avatar appears beside the book; mouth moves as you talk.
-> "That's a real PSTN call through the Vonage Voice API, answered by the Vonage Client SDK inside a WebXR app built with XR Blocks."
-
-**1:10 – 1:50 — Reading + highlighting**
-Read page 1 aloud. Words light up; say "dragon" → dragon wiggles.
-> "The parent's audio drives the lip-sync avatar *and* a live transcription, so the words light up as they're read, and the illustration listens for the story's key words."
-
-**1:50 – 2:30 — The keypad trick (the "surprise")**
-Press **#** on the phone — page turns. Press **1** — dragon roars. Press **\*** — back.
-Cut to terminal for 3 seconds: `KEYPAD: #` lines.
-> "No screen on the parent's side, ever. Vonage's asynchronous DTMF turns a 1970s keypad into an AR controller."
-
-**2:30 – 3:00 — The child talks back**
-Click **⭐ Hug**. Put the phone to the camera: it says *"Maya just sent you a big hug."*
-> "And the room talks back — text-to-speech played into the parent's leg only, so it's private to them."
-
-**3:00 – 3:30 — Safety + keepsake**
-Quick cut: an unknown number calls → *"Please enter your family PIN."*
-Hang up the story call → terminal `RECORDING downloaded`. Click **Replay last story** → pages turn in sync with the recording.
-> "Only approved numbers or the family PIN get into the child's room. Every story is saved, so on nights the parent can't call, the child still gets their voice."
-
-**3:00 – 3:30 — The one that matters (do not cut this)**
-Close the app entirely — or just don't answer. Call again from the phone.
-Phone audio: *"Maya isn't at the storybook right now. You can still read tonight's story and it
-will be waiting in the morning…"*
-Read a page. Press **#**. The phone says back: *"Page two."*
-Hang up. Now open the app: **"Dad read you a story last night."** Press it — the pages turn in
-his voice.
-> "A parent in prison gets fifteen minutes of phone time a week. If the child is already asleep,
-> most systems would tell them to call back. This one lets them read anyway — and the story is
-> waiting in the morning."
-
-**3:30 – 4:00 — Why it's real**
-On-screen: MN DOC 13 % recidivism stat, PA DOC $680K VR program, United Through Reading 300 story stations.
-> "Family contact measurably reduces re-offending. States are already paying for VR visits that need a headset inside the facility. Ours needs only the phone the parent already has. Pilot partners: United Through Reading, Storybook Dads, children's hospitals."
-
-**4:00 – 4:15 — Close**
-> "Once Upon a Call. Redefining who gets to say goodnight. Built with the Vonage Voice API and XR Blocks for CreateHER Fest's DIALED IN challenge."
-GitHub link on screen.
+- `npm run demo` running. Wait for **`Public URL reachable`** before anything else.
+- Chrome full-screen on the storybook. Terminal on a second window you can cut to.
+- **Headphones in the laptop** or the phone will pick up the laptop speakers and echo.
+- Phone's in-call dialpad already open before you dial — you don't want to film yourself hunting for it.
+- **Film Beat 7 separately, as its own take.** It needs a second call with the storybook closed. Cut it in.
+- If anything breaks: press **▶ Watch the story**. It drives the same page-turn, highlight and effect code. Never film a broken take.
 
 ---
 
-**Shot checklist**
-- [ ] Phone dialing, audible welcome prompt
-- [ ] Story menu read aloud + a digit pressed to choose the book
-- [ ] Avatar mouth moving with your voice
-- [ ] Words highlighting (needs DEEPGRAM_API_KEY)
-- [ ] `#` page turn + `1` roar, with terminal `KEYPAD:` cut
-- [ ] Hug heard on the phone
-- [ ] PIN prompt from a second phone (or set APPROVED_NUMBERS to exclude your phone for one take)
-- [ ] **Unattended read: nobody answers, "Page two." spoken back, story waiting in the morning**
-- [ ] Replay mode
-- [ ] (Backup take) ▶ Watch the story narrated tour
-- [ ] Live captions visible under the illustration
-- [ ] Stats card + GitHub link
+## Beat 1 — The problem (0:00–0:20)
+
+**SHOW:** Black screen, or a still of a payphone / a hospital bedside phone.
+
+> **SAY:** "Tonight, two point seven million children in the United States have a parent in prison. A quarter of a million have a parent deployed overseas. For those kids, the thing that reaches home isn't an app. It's a phone call. Fifteen minutes on a handset, and no screen on the other end."
+
+*Don't rush this. The silence after "no screen on the other end" is doing work.*
+
+---
+
+## Beat 2 — The idea (0:20–0:40)
+
+**SHOW:** Cut to the storybook, open, waiting. **POINT AT** the status line reading **`Waiting for a story call…`**
+
+> **SAY:** "Once Upon a Call turns that phone call into a bedtime story the child can see. The parent needs nothing but a phone. Any phone. A flip phone, a payphone, a prison handset. This is what's in the child's room."
+
+---
+
+## Beat 3 — The call, and choosing the book (0:40–1:20)
+
+**DO:** Hold the phone in frame. Dial the Vonage number. **Let the phone audio play out loud.**
+
+**EXPECT to hear:**
+> *"Welcome to Once Upon a Call. Choose tonight's story for Maya. Press 1 for the little dragon who couldn't sleep. Press 2 for the rabbit who waited for the moon. Press 3 for the boat that sailed through the storm. Take your time; press a number when you are ready."*
+
+**DO:** Press **2**.
+
+**POINT AT** the shelf on screen — the card switches to *The Rabbit Who Waited for the Moon* before a single word is read.
+
+> **SAY:** "The parent picks tonight's book from a keypad menu. They never see a screen. And watch — the shelf changes on the child's side before the story even starts."
+
+**EXPECT:** the call connects. The avatar appears beside the book. Its mouth moves when you talk.
+
+> **SAY:** "That's a real phone call over the public telephone network, through the Vonage Voice API, answered by the Vonage Client SDK running inside a WebXR app."
+
+---
+
+## Beat 4 — Reading, and the words lighting up (1:20–1:55)
+
+**DO:** Read page one aloud into the phone, slowly.
+
+**POINT AT** the words as they highlight.
+
+> **SAY:** "The parent's voice does two jobs at once. It drives the avatar's mouth, and it feeds a live transcription — so each word lights up as it's read. The child follows along in their parent's actual voice."
+
+**DO:** Say the word **"moon"** clearly.
+
+**EXPECT:** the illustration reacts.
+
+> **SAY:** "And the picture is listening for the story's own words."
+
+---
+
+## Beat 5 — The keypad becomes the controller (1:55–2:30)
+
+**DO:** Hold the phone up so the keypad is visible. Press **#**.
+
+**EXPECT:** the page turns on screen.
+
+> **SAY:** "Press pound — the page turns."
+
+**DO:** Press **1**.
+
+**EXPECT:** the effect fires.
+
+> **SAY:** "Press one — a surprise in the picture."
+
+**DO:** Press **\***. **EXPECT:** page goes back.
+
+**CUT TO TERMINAL for about three seconds.** **POINT AT** the `KEYPAD:` lines.
+
+> **SAY:** "That's Vonage's asynchronous DTMF. Every key press comes off the live call as a webhook, straight into the 3D scene. A nineteen-seventies keypad, driving an augmented reality storybook, with no app on the parent's side at all."
+
+---
+
+## Beat 6 — The room answers back (2:30–2:55)
+
+**DO:** Click **⭐ Hug** on screen. Hold the phone to the camera and **let it play out loud.**
+
+**EXPECT to hear:**
+> *"Maya just sent you a big hug."*
+
+> **SAY:** "And it goes both ways. The child taps a star, and text-to-speech is played into the parent's leg of the call only. Nobody else on that line hears it. It's just for them."
+
+---
+
+## Beat 7 — The one that matters (2:55–3:50)
+
+> **This is your differentiator. Slow down. Give it room.**
+
+> **SAY:** "But here's the thing about those fifteen minutes. You don't get to choose when they happen. The call is scheduled. The child might be asleep."
+
+**DO:** *(cut to the separate take)* Storybook closed. Dial the number. **Let the audio play.**
+
+**EXPECT to hear:**
+> *"Maya isn't at the storybook right now. You can still read tonight's story and it will be waiting in the morning, with the pages turning in your voice. The Rabbit Who Waited for the Moon. Press pound when you finish each page. Hang up when you're done."*
+
+> **SAY:** "The call doesn't fail. It doesn't hang up. It invites them to read anyway."
+
+**DO:** Read a page aloud. Press **#**.
+
+**EXPECT:** the phone says *"Page 2."*
+
+> **SAY:** "Vonage records it. The keypad still marks every page turn. And the page number is spoken back, so a parent reading into an empty room knows it registered."
+
+**DO:** Hang up. **CUT TO TERMINAL.** **POINT AT** `Recording downloaded -> /recordings/`
+
+> **SAY:** "A missed connection is never a wasted call."
+
+---
+
+## Beat 8 — The morning (3:50–4:05)
+
+**DO:** Open the storybook. **POINT AT** the banner offering last night's story. Click **Replay**.
+
+**EXPECT:** the recording plays, and the pages turn in time with it.
+
+> **SAY:** "In the morning, the child opens the book — and hears last night's story, with the pages turning in their dad's own voice, exactly where he turned them."
+
+---
+
+## Beat 9 — Close (4:05–4:20)
+
+**SHOW:** the storybook, quiet.
+
+> **SAY:** "Voice is the one channel that reaches everywhere. No smartphone, no data plan, no app store. Once Upon a Call takes the humblest thing in communications — a phone call — and turns it into presence in a child's room. Built with the Vonage Voice API, in the browser."
+
+**END CARD:** `Once Upon a Call` · `github.com/usv240/once-upon-a-call`
+
+---
+
+## If you're short on time
+
+Cut in this order: **Beat 4** (shorten to 15s), then **Beat 6**, then **Beat 8**.
+**Never cut Beat 7.** It is the reason this project wins.
