@@ -62,6 +62,56 @@ curl -s -o /dev/null -w '%{http_code}
 
 `200` means Vonage can reach you. Anything else, it still cannot.
 
+### If the port is already Public and it still 404s
+
+Check who is answering:
+
+```bash
+curl -sI https://$CODESPACE_NAME-3000.app.github.dev/api/health | head -12
+```
+
+A header reading `x-served-by: tunnels-prod-...` with a 404 means GitHub's Dev Tunnels relay has
+the port registered but no live connection into the Codespace. The tunnel is broken. No setting
+fixes that: **restart the Codespace** (`Ctrl+Shift+P` -> *Codespaces: Stop Current Codespace*,
+then reopen it from github.com/codespaces). Files and `.env` survive.
+
+### Or skip GitHub entirely (the safer setup for filming)
+
+A tunnel straight from your own machine has no Codespace to go to sleep, no relay in the way, and
+the browser and server on the same box.
+
+1. Copy the two files that are not in git down from the Codespace. From **your machine**:
+
+   ```bash
+   gh codespace cp -c $CODESPACE -e "remote:$DIR/.env" .env
+   gh codespace cp -c $CODESPACE -e "remote:$DIR/private.key" private.key
+   ```
+
+   where `$DIR` is the project path shown in the Codespace prompt.
+
+2. Start a tunnel (no account needed):
+
+   ```bash
+   winget install --id Cloudflare.cloudflared
+   cloudflared tunnel --url http://localhost:3000
+   ```
+
+   It prints a `https://<something>.trycloudflare.com` URL.
+
+3. Put that URL in `.env` as `PUBLIC_URL=https://<something>.trycloudflare.com`, then move the
+   Vonage webhooks to it and start the server:
+
+   ```bash
+   npm run webhooks
+   npm start
+   ```
+
+`npm run webhooks` rewrites the answer and event URLs on the Vonage application itself. **The
+webhooks live on the application, not on the call** - if the public URL moves and you skip this,
+Vonage dials a dead host, the caller hears nothing, and no error ever reaches this server because
+the request never arrives. Run it after any move. A `trycloudflare.com` URL changes every time
+the tunnel restarts, so that means every time.
+
 Then check the box is demo-ready:
 
 ```bash
