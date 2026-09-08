@@ -312,7 +312,11 @@ function storyNCCO(from) {
     {
       action: 'connect',
       from,
-      timeout: 25,
+      // 25s sounds generous until you are the one hearing a ring, finding the tab and pressing
+      // answer. Miss it and the caller is told nobody is there while the child is looking
+      // straight at the storybook - the worst outcome this app has.
+      timeout: 45,
+      eventUrl: [`${BASE_URL}/voice/connect-status`],
       endpoint: [{ type: 'app', user: session.userLoggedIn }],
     },
     // If the connect never completes — the child is asleep, the tablet is face-down, the app
@@ -438,6 +442,29 @@ async function listenToKeypad(why) {
     console.error('subscribeDTMF failed:', e?.response?.data || e.message);
   }
 }
+
+// The connect leg's own events. Reaching this with anything but `answered` means the NCCO has
+// fallen through to the unattended tail: the caller is about to be told nobody is there and
+// invited to read anyway. The session has to know, or the reading that follows is filed as an
+// ordinary call - no page numbers spoken back, no story waiting in the morning.
+app.post('/voice/connect-status', async (req, res) => {
+  const ev = req.body || {};
+  res.sendStatus(200);
+  const status = ev.status || '';
+  if (!status) return;
+  console.log(`CONNECT ${status} leg=${ev.uuid || ''}`);
+
+  if (status === 'answered') return; // the child made it; the main handler takes over
+
+  const gaveUp = ['timeout', 'unanswered', 'rejected', 'busy', 'failed', 'cancelled'].includes(status);
+  if (!gaveUp || !session.parentLeg) return;
+
+  console.log(`Nobody answered the storybook (${status}) - reading to the empty room instead`);
+  session.unattended = true;
+  session.page = 0;
+  await listenToKeypad('the storybook did not answer');
+  broadcastState();
+});
 
 // ---------- call lifecycle ----------
 app.all('/voice/event', async (req, res) => {

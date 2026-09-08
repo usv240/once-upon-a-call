@@ -317,6 +317,42 @@ const post = (p, body) =>
       assert(connect.timeout > 0, 'connect has no ring timeout, so it can hang forever');
       const tail = actions.slice(actions.indexOf('connect') + 1);
       assert(tail.includes('conversation'), 'no fallback if the child never picks up');
+      assert(
+        Array.isArray(connect.eventUrl) && connect.eventUrl.length,
+        'connect reports no events, so nothing can notice it gave up'
+      );
+      assert(
+        connect.timeout >= 40,
+        `ring timeout of ${connect.timeout}s is too short for someone to hear it and answer`
+      );
+    });
+
+    // The bug this guards: when the ring times out the NCCO reads on into the unattended tail,
+    // but nothing told the session. The reading was then filed as an ordinary call - no page
+    // numbers spoken back, no story waiting in the morning - while the caller had just been
+    // told nobody was there.
+    await post('/voice/connect-status', { status: 'timeout', uuid: 'app-leg-1' });
+    await new Promise((r) => setTimeout(r, 200));
+    await check('a ring nobody answers becomes a story read to the empty room', async () => {
+      const state = await get('/api/state');
+      assert(state.unattended === true, 'the fallthrough reading is still filed as an attended call');
+    });
+
+    await check('the keypad is listening after the ring gave up', () => {
+      const text = log.join('');
+      assert(
+        /the storybook did not answer/.test(text),
+        `keypad never subscribed after the ring timed out:\n${text.slice(-400)}`
+      );
+    });
+
+    await check('a connect that is answered does not trigger the empty-room path', async () => {
+      await post('/voice/connect-status', { status: 'answered', uuid: 'app-leg-2' });
+      await new Promise((r) => setTimeout(r, 150));
+      // answered goes through the main event handler, not this one; nothing here should flip
+      const text = log.join('');
+      const hits = text.split('the storybook did not answer').length - 1;
+      assert(hits === 1, `answered was treated as a give-up (${hits} times)`);
     });
 
     sock.close();
