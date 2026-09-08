@@ -119,6 +119,57 @@ function personalise(raw) {
 console.log(`Story library: ${STORIES.map((s) => s.id || s.title).join(', ')}`);
 
 const RECORDINGS_DIR = path.join(__dirname, 'recordings');
+
+// How long a family's stories stay on this disk.
+//
+// These are recordings of a child and their parent, kept unencrypted in a folder. Keeping them
+// forever because nobody wrote the deleting half is not a decision, it is an omission - so the
+// policy is explicit and the numbers are yours to set.
+//
+// Note what this is NOT: "delete it once it has been played". A child wanting last night's
+// story again tomorrow is the entire point of saving it. Age and count are the limits; being
+// heard is not.
+const KEEP_DAYS = Number(process.env.RECORDING_KEEP_DAYS || 30);
+const KEEP_MAX = Number(process.env.RECORDING_KEEP_MAX || 20);
+
+function pruneRecordings(why) {
+  if (!(KEEP_DAYS > 0) && !(KEEP_MAX > 0)) return; // both off: keep everything
+  let files;
+  try {
+    files = fs
+      .readdirSync(RECORDINGS_DIR)
+      .filter((f) => f.endsWith('.mp3'))
+      .map((f) => ({ f, at: fs.statSync(path.join(RECORDINGS_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.at - a.at); // newest first
+  } catch (e) {
+    return; // no folder yet
+  }
+
+  // A story nobody has heard yet is never swept up, however old or however many. It is the one
+  // thing in here somebody is still waiting for.
+  const waiting = new Set(
+    session.recordings.filter((r) => r.unattended && !r.seen).map((r) => r.file)
+  );
+  const cutoff = KEEP_DAYS > 0 ? Date.now() - KEEP_DAYS * 86400000 : 0;
+
+  const doomed = files.filter(
+    (x, i) => !waiting.has(x.f) && ((KEEP_MAX > 0 && i >= KEEP_MAX) || x.at < cutoff)
+  );
+  if (!doomed.length) return;
+
+  for (const x of doomed) {
+    try {
+      fs.unlinkSync(path.join(RECORDINGS_DIR, x.f));
+    } catch (e) {
+      continue;
+    }
+    const i = session.recordings.findIndex((r) => r.file === x.f);
+    if (i >= 0) session.recordings.splice(i, 1);
+  }
+  console.log(
+    `Cleared ${doomed.length} old recording(s) (${why}); keeping the newest ${KEEP_MAX} and anything from the last ${KEEP_DAYS} days`
+  );
+}
 fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
 const session = {
@@ -610,6 +661,7 @@ app.post('/voice/recording', async (req, res) => {
     entry.url = null;
   }
   session.recordings.push(entry);
+  pruneRecordings('a new story was saved');
   io.emit('recording', { count: session.recordings.length, unattended: entry.unattended });
   if (entry.unattended) {
     const told = STORIES.find((st) => (st.id || 'default') === entry.story) || STORIES[0];
@@ -846,5 +898,8 @@ async function checkPubliclyReachable() {
 
 server.listen(port, () => {
   console.log(`Once Upon a Call listening on ${port}`);
+  // session.recordings is empty at boot, so nothing here is "waiting" and the age and count
+  // limits apply to the whole folder. This is what stops a week of testing accumulating.
+  pruneRecordings('startup');
   checkPubliclyReachable();
 });

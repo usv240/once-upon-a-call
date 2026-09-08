@@ -72,6 +72,10 @@ const post = (p, body) =>
       APPROVED_NUMBERS: '',
       FAMILY_PIN: '',
       DEEPGRAM_API_KEY: '',
+      // Keep exactly one, so filing a second forces the retention sweep to run and we can see
+      // what it decides to take with it.
+      RECORDING_KEEP_MAX: '1',
+      RECORDING_KEEP_DAYS: '0',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -282,6 +286,36 @@ const post = (p, body) =>
 
     // put the live session back to something sane for the rest of the run
     await post('/voice/event', { status: 'completed', direction: 'inbound', uuid: 'leg-next' });
+
+    // Retention must never take a story nobody has heard yet. That recording is the one thing
+    // in the folder somebody is still waiting for, and losing it loses the whole idea.
+    await check('a story still waiting for the morning survives the retention sweep', async () => {
+      const beforeIds = (await get('/api/recordings')).map((r) => r.uuid);
+      const waitingBefore = (await get('/api/state')).waitingStories;
+      assert(waitingBefore > 0, 'nothing was waiting, so this check proves nothing');
+
+      // File a newer recording. With RECORDING_KEEP_MAX=1 the sweep now wants to drop everything
+      // except the newest - which would include the unheard one if it were not protected.
+      await post('/voice/recording', {
+        recording_uuid: 'rec-newer',
+        recording_url: 'https://api.nexmo.com/v1/files/also-does-not-exist',
+        start_time: new Date().toISOString(),
+        end_time: new Date().toISOString(),
+        size: 999,
+      });
+      for (let i = 0; i < 40; i++) {
+        if ((await get('/api/recordings')).some((r) => r.uuid === 'rec-newer')) break;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      const after = await get('/api/recordings');
+      const stillThere = after.map((r) => r.uuid);
+      const lostAWaitingOne = beforeIds.some(
+        (id) => id === 'rec-1' && !stillThere.includes('rec-1')
+      );
+      assert(!lostAWaitingOne, 'the retention sweep deleted a story nobody had heard yet');
+    });
+
 
     // The download fails against fake credentials, which is the point: the visual replay must
     // still be offered rather than the whole keepsake being lost.

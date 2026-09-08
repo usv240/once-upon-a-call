@@ -260,6 +260,13 @@ output in it is taken from the code rather than from memory.
 - Recordings stay on the family's server; they are never sent to third parties. The optional ASR key is only used on the child's device for the parent's audio.
 - No secrets in the repo (`.env`, `private.key`, `recordings/` are git-ignored).
 
+**Retention.** Recordings are a child and their parent, kept unencrypted in `recordings/`.
+Keeping them forever because nobody wrote the deleting half is an omission, not a decision, so
+the policy is explicit: the newest `RECORDING_KEEP_MAX` (default 20) and anything from the last
+`RECORDING_KEEP_DAYS` (default 30) stay, the rest are swept at startup and after each new story.
+A story nobody has heard yet is never swept up, however old - it is the one thing in there
+somebody is still waiting for. Set either to `0` to switch that limit off.
+
 ## Path to the real world
 - **Pilot partners**: United Through Reading (300+ story stations on bases), Storybook Dads / Project Bedtime Story (prison reading programs), children's hospitals' child-life departments.
 - **Where it runs**: any WebXR device (Android XR, Quest browser) or a plain laptop/phone — the *child's* side can be a $150 tablet; the *parent's* side is any phone, including institutional phone systems that allow approved numbers.
