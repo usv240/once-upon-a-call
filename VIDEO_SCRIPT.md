@@ -144,7 +144,20 @@ judge is still parsing "DTMF" when the moment has already passed.*
 call covers a deployment window, a ward's one cordless handset, and a shift on the other side of
 the world just as well.*
 
-**DO:** *(cut to the separate take)* Storybook closed. Dial the number. **Let the audio play.**
+**DO:** *(cut to the separate take)* **Let the audio play.**
+
+*Setting this shot up - the empty room has to be genuinely empty, and the server decides that
+before it decides anything else:*
+
+1. **Close every storybook tab.** Closed, not minimised - a hidden tab still holds its socket and
+   still counts as a storybook someone could answer.
+2. The terminal prints `Storybook closed (0 left)`.
+3. Confirm: `curl -s localhost:3000/api/health` shows `"childAppOnline":false`.
+4. **Now dial.** The menu plays first, so press **2** straight away - barge-in cuts the prompt and
+   takes you into the line below with no dead air to edit out.
+
+*If you hear the story open normally instead, a tab was still open. Close it and redial; nothing
+you do mid-call can move a connected call onto this path.*
 
 **EXPECT to hear:**
 > *"Maya isn't at the storybook right now. You can still read tonight's story and it will be waiting in the morning, with the pages turning in your voice. The Rabbit Who Waited for the Moon. Press pound when you finish each page. Hang up when you're done."*
