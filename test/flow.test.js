@@ -309,14 +309,22 @@ const post = (p, body) =>
     const attended = await get(`/voice/answer?from=${CALLER}&uuid=leg-2`);
     const attendedNcco = Array.isArray(attended) ? attended : [];
     const afterChoice = await post('/voice/story-choice', { dtmf: { digits: '1' }, from: CALLER });
-    await check('with the child online the call connects, and still falls through if unanswered', () => {
+    await check('with the child online the call connects, and says nothing after', () => {
       assert(attendedNcco[0].action === 'talk', 'no menu for an online child');
       const actions = (Array.isArray(afterChoice) ? afterChoice : []).map((a) => a.action);
       assert(actions.includes('connect'), `never tries to connect: ${actions.join(', ')}`);
       const connect = afterChoice.find((a) => a.action === 'connect');
       assert(connect.timeout > 0, 'connect has no ring timeout, so it can hang forever');
+
+      // The bug this guards, and it survived a live call before anyone noticed: an NCCO runs
+      // straight on when a connect ends. With the empty-room invitation sitting after it, a
+      // call that bridged and worked perfectly still signed off by telling the caller that
+      // nobody was at the storybook. Nothing may follow the connect.
       const tail = actions.slice(actions.indexOf('connect') + 1);
-      assert(tail.includes('conversation'), 'no fallback if the child never picks up');
+      assert(
+        tail.length === 0,
+        `${tail.join(', ')} runs after the connect, so a successful call ends with it`
+      );
       assert(
         connect.timeout >= 40,
         `ring timeout of ${connect.timeout}s is too short for someone to hear it and answer`

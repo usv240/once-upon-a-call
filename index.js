@@ -320,10 +320,11 @@ function storyNCCO(from) {
       // from /voice/event - including the `answered` that starts the parent's keypad.
       endpoint: [{ type: 'app', user: session.userLoggedIn }],
     },
-    // If the connect never completes — the child is asleep, the tablet is face-down, the app
-    // is open in a tab nobody is looking at — the NCCO carries on rather than hanging up, and
-    // the caller reads to the empty room instead of losing their slot.
-    ...unattendedTail(activeStory()),
+    // Nothing after the connect. The empty-room invitation used to live here, which looked
+    // right and was wrong: an NCCO simply runs on when a connect ends, so a call that worked
+    // perfectly - bridged, read, keypad and all - still signed off by telling the caller that
+    // nobody was at the storybook. When the ring genuinely goes unanswered we transfer the
+    // caller into that read instead, from the event handler, where we actually know.
   ];
 }
 
@@ -484,6 +485,13 @@ app.all('/voice/event', async (req, res) => {
     console.log(`Nobody answered the storybook (${ev.status}) - reading to the empty room instead`);
     session.unattended = true;
     session.page = 0;
+    try {
+      // The recording started before the connect and keeps running, so the caller's reading is
+      // captured either way; this only replaces what they hear next.
+      await vonage.voice.transferCallWithNCCO(session.parentLeg, unattendedTail(activeStory()));
+    } catch (e) {
+      console.error('Could not offer the empty-room read:', e?.response?.data || e.message);
+    }
     await listenToKeypad('the storybook did not answer');
     broadcastState();
   }
