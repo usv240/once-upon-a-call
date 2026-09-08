@@ -8,6 +8,9 @@ const { Vonage } = require('@vonage/server-sdk');
 let vonage;
 
 const PORT = '3000';
+// Codespaces publishes its forwarding domain; it is not always app.github.dev.
+const CODESPACE_DOMAIN =
+  process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || 'app.github.dev';
 
 console.log('setup.js running...');
 
@@ -247,11 +250,11 @@ function createApp(data) {
         voice: {
           webhooks: {
             answer_url: {
-              address: `https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev/voice/answer`,
+              address: `https://${process.env.CODESPACE_NAME}-${PORT}.${CODESPACE_DOMAIN}/voice/answer`,
               http_method: 'GET',
             },
             event_url: {
-              address: `https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev/voice/event`,
+              address: `https://${process.env.CODESPACE_NAME}-${PORT}.${CODESPACE_DOMAIN}/voice/event`,
               http_method: 'POST',
             },
           },
@@ -259,11 +262,11 @@ function createApp(data) {
         messages: {
           webhooks: {
             inbound_url: {
-              address: `https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev/webhooks/inbound`,
+              address: `https://${process.env.CODESPACE_NAME}-${PORT}.${CODESPACE_DOMAIN}/webhooks/inbound`,
               http_method: 'POST',
             },
             status_url: {
-              address: `https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev/webhooks/status`,
+              address: `https://${process.env.CODESPACE_NAME}-${PORT}.${CODESPACE_DOMAIN}/webhooks/status`,
               http_method: 'POST',
             },
           },
@@ -271,7 +274,7 @@ function createApp(data) {
         rtc: {
           webhooks: {
             event_url: {
-              address: `https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev/webhooks/rtcevent`,
+              address: `https://${process.env.CODESPACE_NAME}-${PORT}.${CODESPACE_DOMAIN}/webhooks/rtcevent`,
               http_method: 'POST',
             },
           },

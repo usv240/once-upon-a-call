@@ -45,10 +45,16 @@ const vonage = new Vonage({ applicationId: appId, privateKey });
 const vonageNumber = process.env.VONAGE_PHONE_NUMBER;
 
 // Public base URL Vonage can reach (Codespaces, or PUBLIC_URL for ngrok etc.)
+//
+// The forwarding domain is not always app.github.dev - it varies by account and region, and
+// guessing it produces a hostname that resolves to GitHub's proxy and 404s on everything, which
+// looks exactly like a port left Private. Codespaces publishes the real one; use it.
+const CODESPACE_DOMAIN =
+  process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || 'app.github.dev';
 const BASE_URL =
   process.env.PUBLIC_URL ||
   (process.env.CODESPACE_NAME
-    ? `https://${process.env.CODESPACE_NAME}-${port}.app.github.dev`
+    ? `https://${process.env.CODESPACE_NAME}-${port}.${CODESPACE_DOMAIN}`
     : `http://localhost:${port}`);
 
 // Safety: who may enter the child's room. Empty = open (demo mode).
