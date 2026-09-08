@@ -346,7 +346,7 @@ export class VonageAudioCall extends xb.Script {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC || !(gainValue > 1)) return;
     try {
-      const ctx = (this.audioCtx = this.audioCtx || new AC());
+      const ctx = this._audio() || (this.audioCtx = new AC());
       const src = ctx.createMediaStreamSource(stream);
       const gain = ctx.createGain();
       gain.gain.value = gainValue;
@@ -386,11 +386,31 @@ export class VonageAudioCall extends xb.Script {
     this._boost = null;
   }
 
-  // tiny synthesized sounds (no assets needed)
+  // The AudioContext starts suspended until the page has seen a user gesture. Effects fired from
+  // the parent's keypad arrive over a socket, not from a click here, so without this the
+  // oscillator runs into a suspended context and nothing is heard at all. Unlock on the first
+  // gesture of any kind and keep the handle.
+  _audio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!this.audioCtx) {
+      this.audioCtx = new AC();
+      const wake = () => this.audioCtx.resume().catch(() => {});
+      window.addEventListener('pointerdown', wake);
+      window.addEventListener('keydown', wake);
+      window.addEventListener('touchstart', wake);
+    }
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume().catch(() => {});
+    return this.audioCtx;
+  }
+
+  // Tiny synthesized sounds (no assets needed). These carry a demo - they are heard through a
+  // laptop speaker, on a screen recording, over a phone call already playing - so they are mixed
+  // loud on purpose rather than politely.
   _beep(kind) {
     try {
-      this.audioCtx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = this.audioCtx;
+      const ctx = this._audio();
+      if (!ctx) return;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g);
@@ -398,27 +418,30 @@ export class VonageAudioCall extends xb.Script {
       const t = ctx.currentTime;
       if (kind === 'roar') {
         o.type = 'sawtooth';
-        o.frequency.setValueAtTime(110, t);
-        o.frequency.exponentialRampToValueAtTime(55, t + 0.6);
-        g.gain.setValueAtTime(0.25, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+        o.frequency.setValueAtTime(140, t);
+        o.frequency.exponentialRampToValueAtTime(50, t + 0.7);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.85, t + 0.04); // fast attack, no click
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
       } else if (kind === 'twinkle') {
         o.type = 'sine';
         o.frequency.setValueAtTime(1200, t);
-        o.frequency.setValueAtTime(1800, t + 0.08);
-        o.frequency.setValueAtTime(2400, t + 0.16);
-        g.gain.setValueAtTime(0.15, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        o.frequency.setValueAtTime(1800, t + 0.09);
+        o.frequency.setValueAtTime(2400, t + 0.18);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.6, t + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
       } else {
         o.type = 'triangle';
         o.frequency.setValueAtTime(220, t);
-        g.gain.setValueAtTime(0.12, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.55, t + 0.05);
         g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
       }
       o.start(t);
       o.stop(t + 1.3);
     } catch (e) {
-      /* audio not available */
+      console.warn('Effect sound unavailable:', e?.message || e);
     }
   }
 
