@@ -75,42 +75,51 @@ the port registered but no live connection into the Codespace. The tunnel is bro
 fixes that: **restart the Codespace** (`Ctrl+Shift+P` -> *Codespaces: Stop Current Codespace*,
 then reopen it from github.com/codespaces). Files and `.env` survive.
 
-### Or skip GitHub entirely (the safer setup for filming)
+### Or skip GitHub entirely: `npm run demo`
 
-A tunnel straight from your own machine has no Codespace to go to sleep, no relay in the way, and
-the browser and server on the same box.
+A tunnel straight from your own machine has no Codespace to fall asleep, no GitHub relay in the
+way, and the browser and the server on one box. This is the sturdier setup for filming.
 
-1. Copy the two files that are not in git down from the Codespace. From **your machine**:
+**One-time:** get the two files that are not in git out of the Codespace. In the Codespace file
+explorer, right-click `.env` -> **Download**, same for `private.key`, and drop both in the project
+folder on your machine. (Both are git-ignored; they will not be committed.)
 
-   ```bash
-   gh codespace cp -c $CODESPACE -e "remote:$DIR/.env" .env
-   gh codespace cp -c $CODESPACE -e "remote:$DIR/private.key" private.key
-   ```
+**Every time:**
 
-   where `$DIR` is the project path shown in the Codespace prompt.
+```bash
+npm install
+npm run demo
+```
 
-2. Start a tunnel (no account needed):
+That is the whole thing. `npm run demo` opens a cloudflared quick tunnel (no account needed),
+moves the Vonage webhooks onto its URL, starts the server behind it, and waits for the tunnel to
+actually answer before telling you it is ready. `Ctrl+C` closes tunnel and server together.
 
-   ```bash
-   winget install --id Cloudflare.cloudflared
-   cloudflared tunnel --url http://localhost:3000
-   ```
+**Expect:**
 
-   It prints a `https://<something>.trycloudflare.com` URL.
+```
+Opening a public tunnel...
+Tunnel open: https://<four-words>.trycloudflare.com
+Pointing Vonage application <id> at https://<four-words>.trycloudflare.com
+  answer -> https://<four-words>.trycloudflare.com/voice/answer
+  event  -> https://<four-words>.trycloudflare.com/voice/event
 
-3. Put that URL in `.env` as `PUBLIC_URL=https://<something>.trycloudflare.com`, then move the
-   Vonage webhooks to it and start the server:
+Public base URL: https://<four-words>.trycloudflare.com
+Story library: dragon, rabbit, boat
+Once Upon a Call listening on 3000
+Public URL reachable (https://<four-words>.trycloudflare.com) - Vonage can call in.
+```
 
-   ```bash
-   npm run webhooks
-   npm start
-   ```
+Open that `trycloudflare.com` URL in Chrome - that is the storybook. A quick tunnel takes about
+ten seconds to come up, which is why the reachability check retries rather than failing once.
 
-`npm run webhooks` rewrites the answer and event URLs on the Vonage application itself. **The
-webhooks live on the application, not on the call** - if the public URL moves and you skip this,
-Vonage dials a dead host, the caller hears nothing, and no error ever reaches this server because
-the request never arrives. Run it after any move. A `trycloudflare.com` URL changes every time
-the tunnel restarts, so that means every time.
+### Why `npm run webhooks` exists
+
+The Vonage answer and event URLs live **on the application, not on the call**. Move the public
+URL without moving them and Vonage dials a dead host: the caller hears nothing, and no error ever
+reaches this server, because the request never arrives. `npm run demo` does this for you. Run
+`npm run webhooks` by hand only if you started the server some other way. A `trycloudflare.com`
+hostname is new on every tunnel restart, so this is not a one-time setup step.
 
 Then check the box is demo-ready:
 

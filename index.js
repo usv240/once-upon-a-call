@@ -729,27 +729,42 @@ io.on('connection', (socket) => {
 // say exactly how to fix it rather than letting it surface mid-demo.
 async function checkPubliclyReachable() {
   if (!/^https:/.test(BASE_URL)) return; // localhost: nothing to prove
+
+  // A freshly opened tunnel is not reachable the instant it prints its URL - a cloudflared quick
+  // tunnel takes the better part of ten seconds to come up. Checking once would fail on a setup
+  // that is merely still starting, and a false alarm here sends you debugging the wrong thing.
   let code = 0;
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 8000);
-    const r = await fetch(`${BASE_URL}/api/health`, { signal: ctl.signal, redirect: 'manual' });
-    clearTimeout(t);
-    code = r.status;
-  } catch (e) {
-    console.warn(`Could not reach ${BASE_URL} from here (${e.message}).`);
+  let last = '';
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(`${BASE_URL}/api/health`, { signal: ctl.signal, redirect: 'manual' });
+      clearTimeout(t);
+      code = r.status;
+      if (code === 200) break;
+    } catch (e) {
+      code = 0;
+      last = e.message;
+    }
+    if (attempt < 6) await new Promise((r) => setTimeout(r, 2500));
   }
   if (code === 200) {
     console.log(`Public URL reachable (${BASE_URL}) - Vonage can call in.`);
     return;
   }
+  if (!code && last) console.warn(`Could not reach ${BASE_URL} from here (${last}).`);
   console.warn('');
   console.warn(`!! ${BASE_URL} is NOT publicly reachable${code ? ` (HTTP ${code})` : ''}.`);
   console.warn('   Vonage webhooks will never arrive and the browser will show a 404.');
-  if (process.env.CODESPACE_NAME) {
+  if (process.env.PUBLIC_URL) {
+    console.warn('   Check that the tunnel is still up and PUBLIC_URL matches its address.');
+  } else if (process.env.CODESPACE_NAME) {
     console.warn('   Fix it with:');
     console.warn(`     gh codespace ports visibility ${port}:public -c $CODESPACE_NAME`);
     console.warn(`   or Ports tab -> ${port} -> right-click -> Port Visibility -> Public.`);
+    console.warn('   If the port is already Public, the Codespace tunnel itself is broken:');
+    console.warn('     npm run demo    (tunnels from this machine instead, no GitHub relay)');
   } else {
     console.warn('   Check PUBLIC_URL and that your tunnel is running.');
   }
