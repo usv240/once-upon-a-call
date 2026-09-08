@@ -916,11 +916,49 @@ export class VonageAudioCall extends xb.Script {
     }
     const lastEvent = (data.events || []).reduce((m, ev) => Math.max(m, ev.t - t0), 0);
 
+    // Word highlighting for a story read to an empty room.
+    //
+    // Live, the words light up from Deepgram running in this browser on the call's audio. Nobody
+    // was in the browser for this reading - that is what made it an empty room - so there is no
+    // transcript to replay, and the page would otherwise sit inert while the parent's voice
+    // reads it aloud.
+    //
+    // The page turns, though, are real: the parent pressed # at the end of each page and we
+    // stamped it. So walk the highlight across each page between its own turn and the next. It
+    // claims only what we actually know - which page the voice is on, and roughly how far
+    // through it - and never pretends to have heard a particular word.
+    const heardWords = (data.events || []).some((ev) => ev.type === 'words');
+    const pageTurns = (data.events || []).filter((ev) => ev.type === 'page');
+    let paced = false;
+    const paceHighlight = (endMs) => {
+      if (paced || heardWords || !pageTurns.length) return;
+      paced = true;
+      pageTurns.forEach((ev, i) => {
+        const from = Math.max(0, ev.t - t0);
+        const to = pageTurns[i + 1] ? pageTurns[i + 1].t - t0 : endMs;
+        const text = this.story?.pages?.[ev.data.page]?.text || '';
+        const n = text.trim().split(/\s+/).filter(Boolean).length;
+        if (n < 1 || to <= from) return;
+        for (let w = 1; w <= n; w++) {
+          timers.push(
+            setTimeout(() => this.book?.highlightUpTo(w), from + ((to - from) * w) / (n + 1))
+          );
+        }
+      });
+    };
+
     let audio = null;
     if (data.audioUrl) {
       audio = new Audio(data.audioUrl);
       audio.onended = () => this._stopReplay();
       audio.onerror = () => this.book?.setBanner('Replaying the pages — audio unavailable');
+      // The last page has no turn after it, so its pacing needs the recording's length. If the
+      // metadata never arrives, fall back to the last event plus a breath.
+      audio.onloadedmetadata = () => {
+        const ms = Number.isFinite(audio.duration) ? audio.duration * 1000 : lastEvent + 6000;
+        paceHighlight(ms);
+      };
+      setTimeout(() => paceHighlight(lastEvent + 6000), 1500);
       audio.play().catch((e) => console.warn('autoplay blocked; press Replay again', e));
       this.book.setBanner(
         data.unattended
@@ -929,6 +967,7 @@ export class VonageAudioCall extends xb.Script {
       );
     } else {
       this.book.setBanner(`Replaying ${who}'s pages — the recording is still uploading`);
+      paceHighlight(lastEvent + 3000);
       timers.push(setTimeout(() => this._stopReplay(), lastEvent + 3000));
     }
 
