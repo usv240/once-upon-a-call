@@ -8,7 +8,7 @@
   "waitFor": "onCreateCommand",
   "updateContentCommand": "npm install",
   "postCreateCommand": "npm install",
-  "postAttachCommand": "gh codespace ports visibility 3000:public -c $CODESPACE_NAME && node setup.js && npm start",
+  "postAttachCommand": "gh codespace ports visibility 3000:public -c $CODESPACE_NAME; npm start",
   "customizations": {
     "codespaces": {
       "openFiles": [
@@ -18,7 +18,7 @@
   },
   "portsAttributes": {
     "3000":{
-      "label": "Vonage Node Voice Learning Server",
+      "label": "Once Upon a Call",
       "onAutoForward": "openPreview",
       "protocol": "http"
     }

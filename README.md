@@ -1,285 +1,328 @@
 # Once Upon a Call 📖📞
 
-**A live AR bedtime story, read over any phone.**
+**A bedtime story read over any phone, into a storybook the child can see.**
 
-Some parents can't be home at bedtime — and the only thing they have is a plain phone. A soldier on deployment. A mom in a hospital bed. A dad working abroad. A parent in jail. No video, no app, no internet. Just a number they can dial.
+A parent dials an ordinary phone number. In the child's room a 3D storybook opens and their
+parent's voice is in it. The parent turns the pages from their phone keypad. They never see a
+screen, and they never need an app.
 
-Once Upon a Call turns that phone call into a *presence*. The parent dials in from any phone on Earth. In the child's room (AR headset, or a laptop/phone in fallback), the parent appears beside the bed with a floating storybook. As they read, the words light up. When they press **#** on their keypad, the page turns. When they press **1**, the dragon roars. The child taps a star and the parent hears, in their ear only: *"Maya just sent you a big hug."* Every story is recorded, so on nights the parent can't call, the child can replay it — pages turning in time with their voice.
+And if nobody is at the storybook, the call does not fail. The parent is invited to read anyway,
+and the story is waiting in the morning, in their voice.
 
-> **No phone handy?** Open the app and press **▶ Watch the story**. It narrates the whole book
-> with page turns, word highlighting and illustration effects — the same code paths a real call
-> drives — so you can see the entire experience without dialling anything.
-
-### The story that gets through anyway
-
-Whoever is calling may have booked this slot days ago: a prison phone allowance, a satellite
-window, a ward's one cordless handset. So if nobody is at the storybook — the app was never
-opened, or the child is already asleep — the call **does not hang up**. The caller is told the
-child isn't there, and invited to read anyway. Vonage records it, their keypad still turns the
-pages into the timeline, and the page number is spoken back into their ear so they know it
-registered. In the morning the child opens the book to *"Dad read you a story last night"*, and
-it plays back with the pages turning in his voice.
-
-It costs the caller nothing but the time they had already set aside, and it means a missed
-connection is never a wasted call.
-
-### The shelf
-
-Three stories ship with it, and the parent chooses one from their keypad before the reading
-starts — the titles are read aloud, they press a digit. A caregiver can also pick on the
-child's screen beforehand; whoever chooses last wins, and saying nothing simply keeps the
-current book.
-
-| Story | Character | For the child who… |
-|---|---|---|
-| The Little Dragon Who Couldn't Sleep | 🐉 | can't settle at bedtime |
-| The Rabbit Who Waited for the Moon | 🐰 | is waiting for someone to come back |
-| The Little Boat That Sailed Home | ⛵ | has a parent working far away |
-
-Adding a fourth is a writing job, not a drawing job: drop a JSON file in `static/stories/`
-naming a scene per page from the art engine's vocabulary, and it appears in the keypad menu,
-on the shelf and in the printed card with no code change. `npm test` will tell you if you
-name a scene or a keyword that can never fire.
-
-Built for the **DIALED IN Builder Challenge** (CreateHER Fest × Vonage), Washington DC cohort.
-Lenses: **Access** and **Connection** (with a good helping of Play).
+Built for the **DIALED IN Builder Challenge** (CreateHER Fest × Vonage) with the Vonage Voice API.
 
 ---
 
-## Why this matters
+## The problem
 
-| Who | Scale | What they have today |
-|---|---|---|
-| Children with an incarcerated parent | ~2.7 M in the US (1 in 28) [[1]](#references) | 15-min voice calls; recorded-story programs mailed on CD weeks later |
-| Children with a deployed parent | ~250 K per year; "40 million missed stories a year" [[2]](#references) | Pre-recorded video via United Through Reading story stations |
-| Children of hospitalized / overseas-working parents | — | Video calls *if* both sides have devices, data, and privacy |
+About **1 in 14 children in the United States has had a parent in prison**
+([Annie E. Casey Foundation, KIDS COUNT](https://www.aecf.org/resources/a-shared-sentence)).
+Hundreds of thousands more have a parent deployed, working nights, in hospital, or an ocean away
+for work.
 
-Family contact is not a nicety: in the Minnesota DOC study of 16,400 people, any family visit cut felony re-conviction by **13 %** [[3]](#references), and frequent phone contact lowers parenting stress and improves post-release attachment [[4]](#references). Pennsylvania's DOC spent **$680 K** on VR family visits [[5]](#references) — proof of institutional demand — but their model needs a headset *inside* the facility. Ours needs only the phone the parent already has.
+Those parents are not offline. They are **screenless**. What reaches home is a phone call, often a
+scheduled one, often on a handset with twelve keys and nothing else.
 
-Existing products (Caribu, Readeo, Storybook Dads, United Through Reading) are either **video on both ends** or **recorded and one-way**. Nothing is live, two-way, and phone-only on the parent's side. That's the gap.
+Meanwhile the advice every paediatrician gives is the same: **read to your child, every day, from
+infancy** ([American Academy of Pediatrics policy statement, 2014](https://publications.aap.org/pediatrics/article/134/2/404/32946)).
+The UK charity [Storybook Dads](https://www.storybookdads.org.uk/) has spent twenty years proving
+the point the hard way, recording incarcerated parents reading picture books, burning them to
+disc and posting them home.
+
+This asks what that looks like if the phone call itself becomes the storybook.
 
 ---
 
-## How it works
+## What it does
 
-One call, two endings. The right-hand branch is the part that makes this more than a phone
-remote: when there is nobody to answer, the call is not wasted - it becomes something the child
-opens in the morning.
+| | |
+|---|---|
+| **Choose the book** | The call opens with a spoken menu. Press **1**, **2** or **3**. The shelf on the child's screen changes before a word is read. |
+| **Read together** | The parent's voice drives a lip-synced avatar beside the book and a live transcription, so each word lights up as it is read. |
+| **The keypad is the remote** | **#** turns the page, **\*** goes back, **1 2 3** fire surprises in the illustration. |
+| **The room answers back** | The child taps a star and the parent hears *"Maya just sent you a big hug"* in their ear alone. |
+| **Nobody home?** | The call is not wasted. The parent reads to the empty room, it is recorded, and the child finds it in the morning. |
+| **The morning replay** | The recording plays back with the pages turning exactly where the parent pressed **#**. |
+| **No phone to hand?** | Press **▶ Watch the story** for a narrated tour that drives the same page, highlight and effect code. |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Phone["Any phone<br/>landline, payphone, flip phone"]
+    Vonage["Vonage Voice API"]
+    Server["Node + Express<br/>index.js"]
+    Book["WebXR storybook<br/>three.js + XR Blocks"]
+    ASR["Deepgram<br/>streaming ASR"]
+    Disk[("recordings/")]
+
+    Phone -->|"PSTN call"| Vonage
+    Vonage -->|"webhooks: answer, event, dtmf, recording"| Server
+    Server -->|"NCCO + REST"| Vonage
+    Server <-->|"socket.io: pages, effects, state"| Book
+    Vonage <-->|"Client SDK audio leg"| Book
+    Book -->|"remote audio"| ASR
+    ASR -->|"words"| Book
+    Server --> Disk
+```
+
+The parent's audio never touches our server. It goes phone → Vonage → the browser's Client SDK
+leg. What the server carries is control: which page, which effect, what to say back.
+
+### One call, two endings
+
+The right-hand branch is the part that makes this more than a phone remote.
 
 ```mermaid
 flowchart TD
-    A["Parent dials the Vonage number<br/>(any phone - flip phone, payphone, prison handset)"] --> B{"Approved caller<br/>or family PIN?"}
+    A["Parent dials in"] --> B{"Approved caller<br/>or family PIN?"}
     B -->|no| Z["Call ends politely"]
-    B -->|yes| C["Keypad menu:<br/>choose tonight's story"]
+    B -->|yes| C["Spoken menu:<br/>press 1, 2 or 3"]
     C --> D{"Is a storybook<br/>open right now?"}
 
-    D -->|yes| E["connect - the parent's voice<br/>arrives in the child's room"]
-    E --> F["Live: lip-synced avatar, Deepgram ASR<br/>lights up each word, keypad turns pages<br/>and fires effects, child's star sends a<br/>hug into the parent's ear alone"]
-    F --> G["Hang up - Vonage recording downloaded,<br/>page turns saved as a timeline"]
+    D -->|yes| E["Bridged: the parent's voice<br/>arrives in the child's room"]
+    E --> F["Words light up, keypad turns pages,<br/>the child's hug goes back privately"]
 
-    D -->|no| H["'She isn't at the storybook right now.<br/>Read anyway - it will be waiting.'"]
-    H --> I["record + conversation:<br/>the parent reads to an empty room"]
-    I --> J["Keypad still writes the timeline;<br/>the page number is spoken back<br/>so they know it registered"]
-    J --> G
+    D -->|no| G["'She isn't at the storybook.<br/>Read anyway, it will be waiting.'"]
+    G --> H["Recorded. The keypad still marks<br/>page turns, page numbers read back"]
 
-    G --> K["Morning: 'Dad read you a story last night'<br/>- it plays back with the pages turning<br/>in his own voice"]
+    F --> I["Recording saved with its page timeline"]
+    H --> I
+    I --> J["Morning: the child opens the book<br/>and hears it in their parent's voice"]
 
+    style G fill:#2d1b4e,stroke:#8b5cf6,color:#fff
     style H fill:#2d1b4e,stroke:#8b5cf6,color:#fff
-    style I fill:#2d1b4e,stroke:#8b5cf6,color:#fff
-    style J fill:#2d1b4e,stroke:#8b5cf6,color:#fff
-    style K fill:#1e3a2f,stroke:#10b981,color:#fff
+    style J fill:#1e3a2f,stroke:#10b981,color:#fff
 ```
 
-<details>
-<summary>The same thing with every endpoint named</summary>
+---
 
-```
-Parent's phone ──PSTN──▶ Vonage number (+1 201 890 3507)
-                          │  NCCO: talk (welcome) → [input PIN if not approved]
-                          │        → input (choose tonight's story) → record → connect{app}
-                          ▼
-                 Child's WebXR app (Vonage Client SDK leg, XR Blocks)
-                          │
-   Vonage async DTMF ─────┼──▶ /voice/dtmf ──▶ socket.io ──▶ page turn / effect in AR
-   Parent's audio  ───────┼──▶ lip-synced avatar  +  Deepgram streaming ASR ──▶ words light up
-   Child taps ⭐  ────────┼──▶ /api/say ──▶ PUT /calls/{parentLeg}/talk ──▶ only the parent hears it
-   Keypad at the menu ────┼──▶ /voice/story-choice ──▶ tonight's book, chosen without a screen
-   Hang-up ───────────────┴──▶ /voice/recording ──▶ mp3 downloaded ──▶ Replay mode (+ SMS to caregiver)
+## Vonage features used, and why
 
-   Nobody answers? ───────▶ talk + record + conversation ──▶ the caller reads to an empty room;
-                                            keypad still writes the timeline, page numbers are
-                                            spoken back, and the child finds it in the morning.
+| Feature | What it does here |
+|---|---|
+| NCCO `talk` + `input` | The spoken story menu, the family PIN gate, page numbers read back |
+| NCCO `connect` | Bridges the phone to the WebXR app over the Client SDK |
+| NCCO `record` | Keeps the story from a live call |
+| NCCO `conversation` with `record` | Holds the line open for a parent reading to an empty room, and records **that**, because a `record` action stops at the mouth of a conversation |
+| Asynchronous DTMF (`subscribeDTMF`) | Every keypress arrives as a webhook and turns a page in 3D, mid-call |
+| Per-leg TTS (`playTTS`) | The child's message is played into the parent's leg only |
+| `transferCallWithNCCO` | Moves a caller into the empty-room read when the ring goes unanswered |
+| `downloadRecording` | Fetches the mp3 server-side, so no credentials reach the browser |
+| Users API (`users.createUser`) | The child's app is a real Vonage user the phone can ring |
+| Messages API (`messages.send`) | Optional SMS to a caregiver when a story is waiting |
 
-   No phone to hand?  ▶ Watch the story ──▶ browser speech synthesis narrates the same book,
-                                            driving the same highlight / effect / page code.
-```
+It degrades all the way down, on purpose:
 
-</details>
-
-### Vonage Voice API features used (and why)
-
-| Feature | Where | Purpose |
-|---|---|---|
-| **Client SDK in-app voice** | `static/VonageAudioCall.js`, `/token` | The child's XR app is a call leg; the WebRTC stream drives the lip-sync avatar |
-| **NCCO `talk`** | `/voice/answer` | Welcome + keypad instructions for a screenless caller |
-| **NCCO `input` (DTMF)** | `/voice/answer`, `/voice/pin`, `/voice/story-choice` | Family PIN gate for numbers not on the allow-list, and choosing tonight's book from a menu read aloud — the parent picks a story without ever seeing a screen |
-| **NCCO `record`** | `/voice/answer`, `/voice/recording` | Every story becomes a keepsake |
-| **NCCO `conversation`** | `unattendedTail()` | Holds the line open when nobody answers, so the caller can read to an empty room instead of losing a slot they waited a week for |
-| **Asynchronous DTMF** (`PUT /calls/{uuid}/input/dtmf`) | `subscribeDTMF`, `/voice/dtmf` | A 1970s keypad becomes an AR controller: `#` next page, `*` back, `1-3` effects |
-| **Per-leg TTS** (`PUT /calls/{uuid}/talk`) | `/api/say`, `/voice/dtmf` | The AR world talks back *only* into the parent's ear — the child's messages, and the page number when they are reading to an empty room and have no other feedback |
-| **Recording download** | `downloadRecording` | Replay without exposing credentials to the browser |
-| **Messages API** (optional) | `/voice/recording` | Caregiver SMS when a story is saved |
-
-### Other tech
-- **XR Blocks** (Google) — WebXR framework from the workshop: spatial panels, hand/mouse interaction, depth, desktop simulator. Pinned to build `595aeb64` (pre-0.20 API).
-- **three.js** canvas-textured storybook with procedural illustrations (no assets to load).
-- **Deepgram** streaming ASR (optional) for word-by-word highlighting.
-- **socket.io** for server → XR events.
+- **No headset** → the XR Blocks simulator in any browser
+- **No Deepgram key** → words stop glowing, everything else works
+- **No phone** → **▶ Watch the story** narrates the whole book
 
 ---
 
 ## Run it
 
-Prerequisites: a Vonage API account with a voice-enabled number, Node 20+.
+Node 18 or newer.
 
 ```bash
-git clone https://github.com/usv240/once-upon-a-call
-cd once-upon-a-call
 npm install
-cp .env.example .env      # fill in Vonage app id, private key (base64), number
-npm start                 # http://localhost:3000
-npm run demo              # tunnel + webhooks + server, one command
+cp .env.example .env     # then fill it in
 ```
 
-Vonage must be able to reach your server. On GitHub Codespaces the public URL is derived automatically, but the port is forwarded **Private** by default — which answers Vonage with nothing and your browser with a 404. Run `gh codespace ports visibility 3000:public -c $CODESPACE_NAME`. The server checks this for you at boot and prints the command if it is still closed. Locally, run `ngrok http 3000` and set `PUBLIC_URL`. Point your Vonage application's **answer** webhook to `<PUBLIC_URL>/voice/answer` (GET) and **event** webhook to `<PUBLIC_URL>/voice/event` (POST) — the included `setup-project.js` does this for Codespaces.
+Vonage has to be able to reach your server. Two ways:
 
-Optional `.env`:
-```
-CHILD_NAME=Maya                             # spoken in the menu and on the last page
-PARENT_NAME=Dad                             # who the child is sending messages to
-APPROVED_NUMBERS=17045551234,17045556789   # who may enter the child's room
-FAMILY_PIN=2468                             # everyone else is asked for this
-CAREGIVER_NUMBER=17045551234                # SMS when a story is saved
-DEEPGRAM_API_KEY=...                        # live word highlighting
-```
-
-Handy URL parameters: `?gain=3` makes the parent's voice louder (`?gain=1` turns the boost off),
-`?dist=0.9` brings the storybook closer, which helps when filming on a large monitor.
-
-### Pre-flight
-
-`GET /api/health` answers "will tonight's demo work?" in one call — whether the Vonage app and
-number are configured, whether the public URL is reachable from outside, whether the child's app
-has a live token, and whether captions, the allow-list and the PIN are switched on.
+### Option A: from your own machine (recommended)
 
 ```bash
-curl -s localhost:3000/api/health | jq
+npm run demo
 ```
 
-### Using it
-0. **Without a phone:** press **▶ Watch the story** on the landing page (or **▶ Preview** in the
-   3D panel) for the narrated tour.
-1. Open the app, allow the microphone, click **OPEN THE STORYBOOK** (headset: enters AR; laptop: XR Blocks simulator).
-2. From any phone, call the Vonage number. Answer in the app.
-3. Parent reads. **#** turns the page, **\*** goes back, **1/2/3** trigger surprises.
-4. Child taps **⭐ Hug** (or any message) — the parent hears it.
-5. Hang up → the story is saved. **Replay last story** plays it back with page turns and highlights in sync.
-6. If nobody answers, keep reading anyway — the story is kept and the child finds it in the morning.
+One command: it opens a public [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
+tunnel (no account needed), points your Vonage application's webhooks at it, starts the server
+behind it, and waits until the tunnel actually answers. `Ctrl+C` closes both.
+
+```
+Tunnel open: https://<four-words>.trycloudflare.com
+Pointing Vonage application <id> at https://<four-words>.trycloudflare.com
+  answer -> https://<four-words>.trycloudflare.com/voice/answer
+  event  -> https://<four-words>.trycloudflare.com/voice/event
+Once Upon a Call listening on 3000
+Public URL reachable (https://<four-words>.trycloudflare.com) - Vonage can call in.
+```
+
+Open that URL. That is the storybook.
+
+### Option B: GitHub Codespaces
+
+```bash
+npm start
+```
+
+The public URL is derived from the Codespace. The port is forwarded **Private** by default, which
+answers Vonage with nothing and your browser with a 404, so make it public:
+
+```bash
+gh codespace ports visibility 3000:public -c $CODESPACE_NAME
+```
+
+The server checks its own public URL at boot and prints this command if it is still closed.
+
+> If the port is already public and it still 404s, the Codespace tunnel itself is broken. Use
+> `npm run demo` instead; it does not go through GitHub's relay.
+
+### Moving the webhooks by hand
+
+The answer and event URLs live **on the Vonage application, not on the call**. If the public URL
+moves and you skip this, Vonage dials a dead host, the caller hears silence, and nothing reaches
+the server to log because the request never arrives.
+
+```bash
+npm run webhooks
+```
+
+`npm run demo` does this for you. `setup-project.js` creates the application from scratch.
+
+---
+
+## Configuration
+
+Everything lives in `.env`. See [`.env.example`](.env.example).
+
+| Variable | Required | What it is |
+|---|---|---|
+| `API_APPLICATION_ID` | yes | Vonage application id |
+| `PRIVATE_KEY` or `PRIVATE_KEY64` | yes | Path to `private.key`, or the key base64-encoded |
+| `VONAGE_PHONE_NUMBER` | yes | The number parents dial |
+| `VONAGE_API_KEY` / `VONAGE_API_SECRET` | for setup | Used by `setup-project.js` and `npm run webhooks` |
+| `PUBLIC_URL` | if not on Codespaces | Your tunnel URL |
+| `CHILD_NAME` / `PARENT_NAME` | no | Overrides the names in the story files |
+| `DEEPGRAM_API_KEY` | no | Live word highlighting. Omit and the rest still works |
+| `APPROVED_NUMBERS` | no | Comma-separated allow-list. Empty means open demo mode |
+| `FAMILY_PIN` | no | Digits an unknown caller must enter |
+| `CAREGIVER_NUMBER` | no | Gets an SMS when a story is saved |
+| `RECORDING_KEEP_DAYS` | no | Retention window, default 30. `0` disables |
+| `RECORDING_KEEP_MAX` | no | Keep the newest N recordings, default 20. `0` disables |
+
+---
+
+## Testing
+
+Two suites run against the real server with no Vonage credentials, using a throwaway RSA key
+generated into the OS temp directory.
+
+```bash
+npm test
+```
+
+- **`test/preview.test.js`** (18 checks) covers the narrated preview's word timing and the story
+  shelf's data integrity.
+- **`test/flow.test.js`** (35 checks) boots `index.js` for real and drives the whole webhook
+  contract **in the order Vonage actually sends it**, which matters: `answered` fires at the start
+  of the NCCO, not when the story begins, and a test that posts events in a tidier order passes
+  while the app is broken. It covers the menu and its retry, the empty-room read, the keypad
+  timeline, recording filing, the morning replay, and the ring-timeout fallthrough.
+
+Four browser suites drive real Chrome with Puppeteer. They need the static fixture server first:
+
+```bash
+npm run fixture       # in one terminal, serves the pages on :3210
+npm run test:browser  # in another
+```
+
+- **`test:layout`** renders 4 viewports × 2 states and checks nothing is unreachable or clipped
+- **`test:pages`** loads every page and fails on a console error or a broken asset
+- **`test:art`** renders every scene in every story and checks the illustrations actually draw
+- **`test:effects`** presses every key on every page and fails on a keypress that does nothing
+  visible, which is how six dead keypresses were found
+
+There is also a manual end-to-end plan in [TESTING.md](TESTING.md) with the exact terminal output
+and spoken prompts to expect, taken from the code rather than written from memory.
+
+---
+
+## Adding a story
+
+Drop a JSON file in `static/stories/`. It appears on the shelf and in the keypad menu with no code
+change.
+
+```json
+{
+  "id": "rabbit",
+  "order": 2,
+  "title": "The Rabbit Who Waited for the Moon",
+  "menuLabel": "the rabbit who waited for the moon",
+  "character": "rabbit",
+  "childName": "Maya",
+  "parentName": "Dad",
+  "pages": [
+    { "text": "In a burrow under the old oak tree...", "scene": "burrow", "keywords": ["burrow"] }
+  ],
+  "effects": {
+    "1": { "label": "Rabbit thump", "sound": "roar" },
+    "2": { "label": "Twinkle", "sound": "twinkle" },
+    "3": { "label": "Moon hum", "sound": "hum" }
+  }
+}
+```
+
+`scene` picks a backdrop from the table in `static/Storybook.js`. `keywords` are the words the
+illustration listens for. Art lives in code, so writing a story stays a writing job.
+
+---
+
+## Safety and privacy
+
+- **Who may enter the room.** `APPROVED_NUMBERS` is an allow-list. Anyone else is asked for
+  `FAMILY_PIN` before the story opens. Both empty means open demo mode, which is what the demo
+  video uses.
+- **The caller's number is masked** on the child's screen down to the last four digits.
+- **Recordings are downloaded server-side.** Vonage credentials never reach the browser.
+- **Retention is explicit.** Recordings are a child and their parent, kept unencrypted on disk.
+  The newest `RECORDING_KEEP_MAX` and anything inside `RECORDING_KEEP_DAYS` stay; the rest are
+  swept at startup and after each new story. **A story nobody has heard yet is never swept up**,
+  however old, because it is the one thing in there somebody is still waiting for.
 
 ---
 
 ## Project layout
 
 ```
-index.js                  Express + socket.io server, all Vonage webhooks and APIs
-static/VonageAudioCall.js XR Blocks script: call UI, avatar, storybook wiring, replay
-static/Storybook.js       Canvas-textured AR book: text highlighting + living illustration
-static/StoryListener.js   Deepgram streaming ASR from the call's remote stream + reading tracker
-static/stories/*.json     The shelf. One file per story: pages, scene per page,
-                          keyword → effect map, keypad effects, menu label
-static/main.js            XR Blocks bootstrap
-pages/index.html          Import map (XR Blocks pinned), Client SDK, socket.io
+index.js              Express + socket.io server, all Vonage integration
+tunnel.js             npm run demo: tunnel + webhooks + server
+update-webhooks.js    npm run webhooks: repoint the Vonage application
+setup-project.js      creates the Vonage application and writes private.key
+pages/                index.html (the storybook), caregiver.html, parent-card.html
+static/               main.js, VonageAudioCall.js, Storybook.js, StoryListener.js
+static/stories/       one JSON file per book
+test/                 six suites, described above
 ```
 
-## Tests
+---
 
-```bash
-npm test              # story data, narration sync, and the whole call flow — no browser, no Vonage account
-npm run fixture &     # static server on :3210 (no Vonage credentials required)
-npm run test:browser  # layout + companion pages + illustrations + keypad effects, in your installed Chrome
-```
+## What's next
 
-**`test/flow.test.js`** boots the real `index.js` with a throwaway RSA key and drives it exactly
-as Vonage would: answer webhook, story menu, the keypad choice, the unattended NCCO, call
-events, DTMF, the recording webhook, and the morning replay. It asserts the NCCO actually
-contains what it must — that `connect` has a ring timeout and a fallback behind it, that the
-`conversation` holds the line, that a fast `##` turns two pages. Outbound calls to Vonage fail
-against the fake credentials on purpose: the flow has to survive that, and the test proves it
-does.
+Real families rather than a demo family: multiple children, per-family rooms keyed by the dialled
+number, and letting a parent record a story for a specific night.
 
-**`test/preview.test.js`** covers the one piece of the preview tour that fails invisibly when
-it is wrong: mapping a speech-synthesis character offset to a word index. Browsers disagree on
-whether that offset lands on a word's first letter or the space before it, and a drifting
-highlight looks like a rendering glitch rather than a bug. It also asserts every keyword in
-every story actually occurs in its own page text, that every page names a scene the art
-engine can draw, and that no `{placeholder}` would be read aloud literally.
+Working with the people who already do this by hand. Storybook Dads and prison family-literacy
+programmes burn recordings to disc and mail them. This does the same job over the phone system
+that is already in the building.
 
-**`test/layout.test.js`** loads the landing overlay at 390 / 1280 / 1920 / 3840 px wide, in both
-the expanded-guide and compact-top-bar states, and fails if any two blocks overlap, anything is
-`position: fixed` (the bug that used to pull the overlay apart), anything overflows the viewport,
-the compact bar grows past a thin strip, or the "Watch the story" button is missing or too small
-to hit. It writes `expanded.png` / `compact.png` for a visual check. Edit `CHROME` at the top of
-the file if your Chrome lives somewhere else.
+And the accessibility case: a parent who cannot read the page could have it read to them, and
+still turn the pages, still be the voice in the room.
 
-**`test/art.test.js`** renders every page of every story in a real browser, fires every effect
-that page can fire, runs a few animation frames and counts how much non-paper ink landed on
-the canvas. The illustrations are procedural, so a typo in `drawRabbit` does not crash
-anything — it just draws nothing, and nobody notices until a judge is watching the video.
-This check caught exactly that: a refactor silently removed `drawDragon`.
-
-**`test/effects.test.js`** presses 1, 2 and 3 on every page of every story and fails if the
-picture does not actually change. Whether a keypad effect is visible depends on the scene —
-"stars twinkle" needs stars, "moon hum" needs a moon — so on a cave or a storm the banner
-appeared and the beep played while nothing moved. It found six such dead keypresses; the art
-now brings the moon out and breaks the storm rather than ignoring the press.
-
-**`test/pages.test.js`** smoke-tests the caregiver and printable parent-card pages for console
-errors and missing content.
-
-`test/serve-fixture.js` exists so the browser tests run on a laptop with no `.env` — `index.js`
-correctly refuses to boot without real Vonage credentials.
-
-## Testing it by hand
-
-[`TESTING.md`](TESTING.md) walks the whole thing end to end — what to click, what the terminal
-should print at each step, what the phone should say, and what each failure means. The expected
-output in it is taken from the code rather than from memory.
-
-## Safety & privacy
-- Only approved numbers (or callers with the family PIN) can enter the child's room.
-- Recordings stay on the family's server; they are never sent to third parties. The optional ASR key is only used on the child's device for the parent's audio.
-- No secrets in the repo (`.env`, `private.key`, `recordings/` are git-ignored).
-
-**Retention.** Recordings are a child and their parent, kept unencrypted in `recordings/`.
-Keeping them forever because nobody wrote the deleting half is an omission, not a decision, so
-the policy is explicit: the newest `RECORDING_KEEP_MAX` (default 20) and anything from the last
-`RECORDING_KEEP_DAYS` (default 30) stay, the rest are swept at startup and after each new story.
-A story nobody has heard yet is never swept up, however old - it is the one thing in there
-somebody is still waiting for. Set either to `0` to switch that limit off.
-
-## Path to the real world
-- **Pilot partners**: United Through Reading (300+ story stations on bases), Storybook Dads / Project Bedtime Story (prison reading programs), children's hospitals' child-life departments.
-- **Where it runs**: any WebXR device (Android XR, Quest browser) or a plain laptop/phone — the *child's* side can be a $150 tablet; the *parent's* side is any phone, including institutional phone systems that allow approved numbers.
-- **Next**: multiple families (per-child rooms keyed by the number dialed), licensed picture books alongside the original ones, illustrator-drawn scenes, and a Vonage Verify flow for caregivers to approve new callers by SMS.
+---
 
 ## References
-1. The Sentencing Project, *Parents in Prison* (2022). https://www.sentencingproject.org/app/uploads/2022/09/Parents-in-Prison.pdf
-2. United Through Reading, *Our Impact*. https://unitedthroughreading.org/about/our-impact/
-3. Minnesota Department of Corrections, *The Effects of Prison Visitation on Offender Recidivism* (2011). https://mn.gov/doc/assets/11-11PrisonVisitationResearchinBrief-Final_tcm1089-272782.pdf
-4. Poehlmann-Tynan et al., *Young Children's Contact with their Parents in Jail and Child Behavior Problems*. https://pmc.ncbi.nlm.nih.gov/articles/PMC11449473/
-5. Pennsylvania DOC, *Virtual Reality Technology to Augment Programming for Incarcerated Parents and Their Children*. https://www.pa.gov/agencies/cor/about-us/newsroom/newsroom/department-of-corrections-introduces-virtual-reality-technology-to-augment-programming-for-incarcerated-parents-and-their-children
-6. Vonage Voice API docs — WebSockets, DTMF, NCCO reference. https://developer.vonage.com/en/voice/voice-api/overview
-7. Google XR Blocks. https://xrblocks.github.io/
+
+- Annie E. Casey Foundation, *A Shared Sentence* (KIDS COUNT policy report) — [aecf.org](https://www.aecf.org/resources/a-shared-sentence)
+- American Academy of Pediatrics, *Literacy Promotion: An Essential Component of Primary Care Pediatric Practice* (2014) — [publications.aap.org](https://publications.aap.org/pediatrics/article/134/2/404/32946)
+- Storybook Dads — [storybookdads.org.uk](https://www.storybookdads.org.uk/)
+- Vonage Voice API, NCCO reference — [developer.vonage.com](https://developer.vonage.com/en/voice/voice-api/ncco-reference)
+- XR Blocks — [github.com/google/xrblocks](https://github.com/google/xrblocks)
 
 ## License
-MIT — built on the CreateHER Fest × Vonage WebXR workshop starter by Dwane Hemmings.
+
+MIT. See [LICENSE](LICENSE).
